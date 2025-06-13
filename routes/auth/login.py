@@ -11,6 +11,7 @@ from db.schema import OTPRequest, OTPVerify, UserSignupSchema, RefreshTokenReque
 from routes.auth.otp_service import send_otp_msg_mail, verify_otp, validate_phone
 from routes.auth.JWTSecurity import create_access_token, create_refresh_token, save_refresh_token, verify_token
 from fastapi.responses import JSONResponse
+from datetime import datetime, timedelta
 
 
 router = APIRouter(
@@ -61,7 +62,7 @@ def login_email(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
         raise HTTPException(status_code=401, detail="Invalid email or password")
     
     # Generate tokens
-    access_token = create_access_token({"sub": user.email, "role": user.role, "phone_number": user.phone_number, "name": user.name, "service": user.service})
+    access_token = create_access_token({"sub": user.email, "role": user.role, "phone_number": user.phone_number, "name": user.name, "service": user.service, "service_active_date": service_active_date})
     refresh_token = create_refresh_token(user.phone_number)  # using phone as unique id for refresh tokens
     save_refresh_token(db, user.phone_number, refresh_token)
     
@@ -110,7 +111,10 @@ def verify_otp_endpoint(data: OTPVerify, db: Session = Depends(get_db)):
             name=reg_data["name"],
             service=reg_data["service"],
             password=hashed_password,
-            role="user"  # default role for regular users
+            role="user",  # default role for regular users
+            service_active_date=(
+                datetime.utcnow() + timedelta(days=3)
+            ).date().isoformat()
         )
         db.add(new_user)
         db.commit()
@@ -225,3 +229,8 @@ def reset_password(
     pending_password_resets.pop(phone, None)
 
     return {"message": "Password reset successful. You can now log in with your new password."}
+
+@router.get("/users", summary="Get all users", response_model=list[UserOut])
+def get_all_users(db: Session = Depends(get_db)):
+    users = db.query(UserDetails).all()
+    return users

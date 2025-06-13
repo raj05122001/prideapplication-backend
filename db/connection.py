@@ -8,7 +8,7 @@ DB_HOST = "localhost"
 DB_PORT = "5432"
 DB_NAME = "prideappdb"
 
-# psql -U stockuser -d stockdb -h localhost -p 5432
+# psql -U pridenotification -d prideappdb -h localhost -p 5432
 # DROP TABLE user_details;   delete table
 
 

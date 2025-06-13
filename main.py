@@ -16,6 +16,7 @@ import json
 
 from routes.auth import login
 from routes.Researcher import researcher
+from routes.Plan import CheckPlan
 
 # Configure Logging
 logging.basicConfig(level=logging.INFO)
@@ -71,6 +72,7 @@ def read_root():
 # Registering Routes
 app.include_router(login.router)
 app.include_router(researcher.router)
+app.include_router(CheckPlan.router)
 
 
 # Database Table Creation

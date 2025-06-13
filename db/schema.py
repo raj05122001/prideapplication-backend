@@ -12,6 +12,7 @@ class UserOut(BaseModel):
     service: str
     email: EmailStr
     created_at: datetime
+    service_active_date: str
 
     class Config:
         orm_mode = True

@@ -23,6 +23,7 @@ class UserDetails(Base):
     password = Column(String(255), nullable=False)  # Hashed password storage.
     role = Column(String(10), default="user", nullable=False)  # Default role is 'user'.
     service = Column(String(100), nullable=False)
+    service_active_date = Column(String(100), nullable=True, default=None)
 
     
     # Optional: record creation timestamp.
