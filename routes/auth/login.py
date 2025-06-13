@@ -62,7 +62,7 @@ def login_email(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
         raise HTTPException(status_code=401, detail="Invalid email or password")
     
     # Generate tokens
-    access_token = create_access_token({"sub": user.email, "role": user.role, "phone_number": user.phone_number, "name": user.name, "service": user.service, "service_active_date": service_active_date})
+    access_token = create_access_token({"sub": user.email, "role": user.role, "phone_number": user.phone_number, "name": user.name, "service": user.service, "service_active_date": user.service_active_date})
     refresh_token = create_refresh_token(user.phone_number)  # using phone as unique id for refresh tokens
     save_refresh_token(db, user.phone_number, refresh_token)
     
