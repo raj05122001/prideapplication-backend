@@ -29,12 +29,12 @@ def check_plan(phone_number: str, db: Session = Depends(get_db)):
     if active_date >= today:
         return {
             "message": "✅ Your plan is active. Enjoy our services!",
-            "login": True,
+            "active": True,
             "service": user.service
         }
     else:
         return {
             "message": "⚠️ Your plan has expired. Please recharge to renew your access.",
-            "login": False,
+            "active": False,
             "service": user.service
         }
