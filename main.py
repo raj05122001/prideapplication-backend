@@ -17,7 +17,7 @@ import json
 from routes.auth import login
 from routes.Researcher import researcher
 from routes.Plan import CheckPlan
-from routes.NewsSubscriptionManager import NewsSubscriptionManager
+from routes.NewsSubscriptionManager import NewsSubscriptionManager, send_notification
 
 # Configure Logging
 logging.basicConfig(level=logging.INFO)
@@ -75,6 +75,7 @@ app.include_router(login.router)
 app.include_router(researcher.router)
 app.include_router(CheckPlan.router)
 app.include_router(NewsSubscriptionManager.router)
+app.include_router(send_notification.router)
 
 
 # Database Table Creation
