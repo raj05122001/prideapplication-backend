@@ -9,6 +9,9 @@ from sqlalchemy.orm import Session
 from db.connection import get_db
 from db.models import PushToken
 
+import requests
+import json
+
 # Initialize Firebase (only do this once)
 try:
     # Check if already initialized
@@ -280,4 +283,101 @@ def get_project_info():
     except Exception as e:
         return {"error": f"Firebase not initialized: {str(e)}"}
 
+
+# Add this to your send_notification.py file
+
+@router.post("/send-expo-notification")
+def send_expo_notification_to_all(
+    req: PushRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Send notifications using Expo Push Service (for development/testing)
+    """
+    try:
+        # Fetch all push tokens
+        all_tokens = db.query(PushToken).all()
         
+        if not all_tokens:
+            raise HTTPException(
+                status_code=404, 
+                detail="No push tokens found in database"
+            )
+        
+        # Filter Expo tokens (they start with ExponentPushToken)
+        expo_tokens = [
+            token.token for token in all_tokens 
+            if token.token.startswith('ExponentPushToken')
+        ]
+        
+        if not expo_tokens:
+            # Try Firebase if no Expo tokens
+            return send_notification_to_all(req, db)
+        
+        # Prepare Expo push notification
+        expo_messages = []
+        for token in expo_tokens:
+            message = {
+                "to": token,
+                "title": req.title,
+                "body": req.body,
+                "data": req.data,
+                "sound": "default",
+                "priority": "high"
+            }
+            expo_messages.append(message)
+        
+        # Send to Expo Push Service
+        expo_response = requests.post(
+            'https://exp.host/--/api/v2/push/send',
+            headers={
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+            },
+            json=expo_messages
+        )
+        
+        if expo_response.status_code == 200:
+            result = expo_response.json()
+            successful_sends = len([r for r in result['data'] if r['status'] == 'ok'])
+            failed_sends = len(expo_messages) - successful_sends
+            
+            return {
+                "service": "expo",
+                "total_tokens": len(expo_tokens),
+                "successful_sends": successful_sends,
+                "failed_sends": failed_sends,
+                "expo_response": result
+            }
+        else:
+            raise HTTPException(
+                status_code=500, 
+                detail=f"Expo push service failed: {expo_response.text}"
+            )
+            
+    except Exception as e:
+        # Fallback to Firebase if Expo fails
+        print(f"Expo notification failed: {str(e)}")
+        print("Falling back to Firebase...")
+        return send_notification_to_all(req, db)
+
+# Update the main endpoint to auto-detect token type
+@router.post("/send-notification-auto", response_model=NotificationResult)
+def send_notification_auto_detect(
+    req: PushRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Automatically detect token type and use appropriate service
+    """
+    try:
+        # First try Expo tokens
+        expo_result = send_expo_notification_to_all(req, db)
+        if expo_result.get("service") == "expo":
+            return expo_result
+    except:
+        pass
+    
+    # Fallback to Firebase
+    return send_notification_to_all(req, db)
+
