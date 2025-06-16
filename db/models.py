@@ -55,3 +55,10 @@ class Option(Base):
     message = Column(Text, nullable=False)
     service = Column(String, nullable=False)
 
+class PushToken(Base):
+    __tablename__ = "push_tokens"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(10), ForeignKey("user_details.phone_number", ondelete="CASCADE"), nullable=False)
+    token = Column(String, unique=True, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
