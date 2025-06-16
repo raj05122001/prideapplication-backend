@@ -381,3 +381,168 @@ def send_notification_auto_detect(
     # Fallback to Firebase
     return send_notification_to_all(req, db)
 
+# Add this to your send_notification.py file
+
+@router.post("/send-mock-notification")
+def send_mock_notification_to_all(
+    req: PushRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Mock notification endpoint for testing with Expo Go
+    Returns notification data that the frontend can use to trigger local notifications
+    """
+    try:
+        # Fetch all push tokens (including mock ones)
+        all_tokens = db.query(PushToken).all()
+        
+        if not all_tokens:
+            raise HTTPException(
+                status_code=404, 
+                detail="No push tokens found in database"
+            )
+        
+        # Count mock vs real tokens
+        mock_tokens = [token for token in all_tokens if 'mock-' in token.token]
+        real_tokens = [token for token in all_tokens if 'mock-' not in token.token]
+        
+        print(f"📊 Found {len(mock_tokens)} mock tokens and {len(real_tokens)} real tokens")
+        
+        # For mock tokens, return the notification data for local delivery
+        mock_responses = []
+        for token_record in mock_tokens:
+            mock_responses.append({
+                "user_id": token_record.user_id,
+                "token": token_record.token,
+                "notification": {
+                    "title": req.title,
+                    "body": req.body,
+                    "data": req.data
+                },
+                "delivery_method": "local_simulation"
+            })
+        
+        # For real tokens, try actual push (will fail in Expo Go but that's expected)
+        real_send_results = []
+        for token_record in real_tokens:
+            try:
+                # Convert data values to strings for FCM
+                fcm_data = {k: str(v) for k, v in req.data.items()} if req.data else {}
+                
+                # Build the message
+                message = messaging.Message(
+                    token=token_record.token,
+                    notification=messaging.Notification(
+                        title=req.title,
+                        body=req.body
+                    ),
+                    data=fcm_data
+                )
+                
+                # Send the message
+                message_id = messaging.send(message)
+                real_send_results.append({
+                    "user_id": token_record.user_id,
+                    "status": "sent",
+                    "message_id": message_id,
+                    "delivery_method": "firebase_push"
+                })
+                print(f"✅ Real push sent to {token_record.user_id}: {message_id}")
+                
+            except Exception as send_error:
+                real_send_results.append({
+                    "user_id": token_record.user_id,
+                    "status": "failed",
+                    "error": str(send_error),
+                    "delivery_method": "firebase_push"
+                })
+                print(f"❌ Failed to send to {token_record.user_id}: {str(send_error)}")
+        
+        return {
+            "status": "mixed_delivery",
+            "total_tokens": len(all_tokens),
+            "mock_simulations": len(mock_tokens),
+            "real_pushes_attempted": len(real_tokens),
+            "mock_responses": mock_responses,
+            "real_results": real_send_results,
+            "notification_data": {
+                "title": req.title,
+                "body": req.body,
+                "data": req.data
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to process notifications: {str(e)}")
+
+@router.post("/trigger-local-notification")
+def trigger_local_notification_for_user(
+    user_id: str,
+    req: PushRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Trigger a local notification for a specific user (for testing)
+    Returns the notification data that the frontend should display
+    """
+    try:
+        # Find user's token
+        user_token = db.query(PushToken).filter(PushToken.user_id == user_id).first()
+        
+        if not user_token:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"No push token found for user_id: {user_id}"
+            )
+        
+        # Return notification data for local display
+        return {
+            "user_id": user_id,
+            "token": user_token.token,
+            "notification": {
+                "title": req.title,
+                "body": req.body,
+                "data": req.data
+            },
+            "delivery_method": "local_trigger",
+            "timestamp": time.time(),
+            "instructions": "Frontend should call simulateIncomingPush() with this data"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to trigger local notification: {str(e)}")
+
+# Update the auto-detect endpoint to handle mock tokens
+@router.post("/send-notification-auto-mock", response_model=NotificationResult)
+def send_notification_auto_detect_with_mock(
+    req: PushRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Auto-detect token types and handle mock tokens appropriately
+    """
+    try:
+        # Try mock endpoint first (for development)
+        mock_result = send_mock_notification_to_all(req, db)
+        if mock_result.get("mock_simulations", 0) > 0:
+            return {
+                "total_tokens": mock_result["total_tokens"],
+                "successful_sends": mock_result["mock_simulations"],
+                "failed_sends": 0,
+                "failed_tokens": [],
+                "delivery_method": "mock_simulation"
+            }
+    except:
+        pass
+    
+    # Fallback to regular endpoints
+    try:
+        return send_expo_notification_to_all(req, db)
+    except:
+        return send_notification_to_all(req, db)
+
+        
