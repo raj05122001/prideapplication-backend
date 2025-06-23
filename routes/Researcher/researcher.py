@@ -101,6 +101,29 @@ async def edit_option(option_id: int, upd: OptionUpdate, db: Session = Depends(g
     }, service=opt.service)
     return opt
 
+@router.delete("/{option_id}", response_model=OptionOut)
+async def delete_option(option_id: int, db: Session = Depends(get_db)):
+    """
+    Delete an Option by its ID, then broadcast a 'deleted' event on its service channel.
+    """
+    # fetch (or 404)
+    opt = get_option(db, option_id)
+    # serialize before removal
+    payload = OptionOut.from_orm(opt).model_dump(mode="json")
+    service = opt.service
+
+    # delete and commit
+    db.delete(opt)
+    db.commit()
+
+    # notify subscribers
+    await manager.broadcast({
+        "action": "deleted",
+        "option": payload
+    }, service=service)
+
+    return opt
+
 # --- WebSocket endpoint for service‐scoped live updates ---
 @router.websocket("/ws/options/{service}")
 async def websocket_options_endpoint(websocket: WebSocket, service: str):
