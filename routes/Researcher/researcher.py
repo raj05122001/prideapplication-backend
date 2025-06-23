@@ -70,16 +70,26 @@ def list_options(skip: int = 0, limit: int = 100, db: Session = Depends(get_db))
     return get_options(db, skip=skip, limit=limit)
 
 @router.get("/{phone}", response_model=List[OptionOut])
-def read_option(phone: int, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    user = db.query(UserDetails).filter(UserDetails.phone_number == phone).first()
+def read_option(
+    phone: str,                # ← phone is now a string
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+):
+    user = (
+        db.query(UserDetails)
+          .filter(UserDetails.phone_number == phone)
+          .first()
+    )
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
     return (
         db.query(Option)
-        .filter(Option.service == user.service)
-        .offset(skip)
-        .limit(limit)
-        .all()
+          .filter(Option.service == user.service)
+          .offset(skip)
+          .limit(limit)
+          .all()
     )
 
 @router.put("/{option_id}", response_model=OptionOut)
