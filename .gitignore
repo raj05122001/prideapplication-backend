@@ -58,3 +58,4 @@ htmlcov/
 # poetry.lock
 # Pipfile.lock
 # requirements.txt
+service_account.json

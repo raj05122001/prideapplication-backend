@@ -1,15 +1,37 @@
-# router.py
-from fastapi import APIRouter, Depends,WebSocket, WebSocketDisconnect, HTTPException
-from typing import List
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, HTTPException
+from typing import List, Dict
+from collections import defaultdict
 from sqlalchemy.orm import Session
 from db.connection import get_db
-from db.schema import OptionOut,  OptionCreate, OptionUpdate
-from db.models import Option
-import asyncio
+from db.schema import OptionOut, OptionCreate, OptionUpdate
+from db.models import Option, UserDetails
+import json
 
 router = APIRouter(prefix="/researcher", tags=["researcher"])
 
-def get_option(db: Session, option_id: int):
+# --- Connection manager for WebSockets, grouped by service ---
+class ConnectionManager:
+    def __init__(self):
+        # service_name → list of WebSocket connections
+        self.active_connections: Dict[str, List[WebSocket]] = defaultdict(list)
+
+    async def connect(self, websocket: WebSocket, service: str):
+        await websocket.accept()
+        self.active_connections[service].append(websocket)
+
+    def disconnect(self, websocket: WebSocket, service: str):
+        if websocket in self.active_connections.get(service, []):
+            self.active_connections[service].remove(websocket)
+
+    async def broadcast(self, message: dict, service: str):
+        data = json.dumps(message)
+        for connection in self.active_connections.get(service, []):
+            await connection.send_text(data)
+
+manager = ConnectionManager()
+
+# --- DB helpers ---
+def get_option(db: Session, option_id: int) -> Option:
     opt = db.query(Option).filter(Option.id == option_id).first()
     if not opt:
         raise HTTPException(status_code=404, detail="Option not found")
@@ -18,14 +40,14 @@ def get_option(db: Session, option_id: int):
 def get_options(db: Session, skip: int = 0, limit: int = 100) -> List[Option]:
     return db.query(Option).offset(skip).limit(limit).all()
 
-def create_option(db: Session, option: OptionCreate):
+def create_option(db: Session, option: OptionCreate) -> Option:
     db_opt = Option(**option.dict())
     db.add(db_opt)
     db.commit()
     db.refresh(db_opt)
     return db_opt
 
-def update_option(db: Session, option_id: int, upd: OptionUpdate):
+def update_option(db: Session, option_id: int, upd: OptionUpdate) -> Option:
     db_opt = get_option(db, option_id)
     for field, value in upd.dict(exclude_unset=True).items():
         setattr(db_opt, field, value)
@@ -33,49 +55,54 @@ def update_option(db: Session, option_id: int, upd: OptionUpdate):
     db.refresh(db_opt)
     return db_opt
 
+# --- CRUD endpoints with broadcasting ---
 @router.post("/", response_model=OptionOut)
-def add_option(option: OptionCreate, db: Session = Depends(get_db)):
-    return create_option(db, option)
+async def add_option(option: OptionCreate, db: Session = Depends(get_db)):
+    opt = create_option(db, option)
+    await manager.broadcast({
+        "action": "created",
+        "option": OptionOut.from_orm(opt).model_dump(mode="json")
+    }, service=opt.service)
+    return opt
 
 @router.get("/", response_model=List[OptionOut])
 def list_options(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
     return get_options(db, skip=skip, limit=limit)
 
-@router.get("/{option_id}", response_model=OptionOut)
-def read_option(option_id: int, db: Session = Depends(get_db)):
-    return get_option(db, option_id)
+@router.get("/{phone}", response_model=List[OptionOut])
+def read_option(phone: int, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    user = db.query(UserDetails).filter(UserDetails.phone_number == phone).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return (
+        db.query(Option)
+        .filter(Option.service == user.service)
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
 @router.put("/{option_id}", response_model=OptionOut)
-def edit_option(option_id: int, upd: OptionUpdate, db: Session = Depends(get_db)):
-    return update_option(db, option_id, upd)
+async def edit_option(option_id: int, upd: OptionUpdate, db: Session = Depends(get_db)):
+    opt = update_option(db, option_id, upd)
+    await manager.broadcast({
+        "action": "updated",
+        "option": OptionOut.from_orm(opt).model_dump(mode="json")
+    }, service=opt.service)
+    return opt
 
-@router.websocket("/ws")
-async def websocket_options(websocket: WebSocket, db: Session = Depends(get_db)):
+# --- WebSocket endpoint for service‐scoped live updates ---
+@router.websocket("/ws/options/{service}")
+async def websocket_options_endpoint(websocket: WebSocket, service: str):
     """
-    WebSocket endpoint that listens for text commands:
-      - 'get_all' -> sends list of all options
-      - 'get_<id>' -> sends single option by id
+    Subscribe here to receive live updates for a given service.
+    Messages will be of the form:
+      { action: "created"|"updated", option: { ...OptionOut fields... } }
     """
-    await websocket.accept()
+    await manager.connect(websocket, service)
     try:
         while True:
-            msg = await websocket.receive_text()
-            if msg == 'get_all':
-                opts = get_options(db)
-                data = [OptionOut.from_orm(o).dict() for o in opts]
-                await websocket.send_json(data)
-            elif msg.startswith('get_'):
-                try:
-                    _, id_str = msg.split('_', 1)
-                    option = get_option(db, int(id_str))
-                    await websocket.send_json(OptionOut.from_orm(option).dict())
-                except (ValueError, HTTPException) as e:
-                    await websocket.send_json({"error": str(e)})
-            else:
-                # ignore or echo
-                await websocket.send_text(f"Unknown command: {msg}")
-            # small pause if needed
-            await asyncio.sleep(0.1)
+            # keep the connection alive; ignore incoming messages
+            await websocket.receive_text()
     except WebSocketDisconnect:
-        # client disconnected
-        pass
+        manager.disconnect(websocket, service)

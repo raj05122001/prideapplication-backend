@@ -38,3 +38,4 @@ openpyxl==3.1.5
 apscheduler==3.11.0
 email_validator==2.2.0
 weasyprint==65.1
+firebase-admin

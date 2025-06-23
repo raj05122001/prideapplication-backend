@@ -1,6 +1,8 @@
 from pydantic import BaseModel, Field, validator, EmailStr
 from typing import List, Optional, Literal
 from datetime import datetime, date
+from pydantic import ConfigDict
+
 
 from random import randint
 
@@ -76,10 +78,25 @@ class OptionUpdate(BaseModel):
 class OptionOut(OptionBase):
     id: int
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 class PasswordReset(BaseModel):
     phone_number: str = Field(..., pattern=r"^\d{10}$")
     otp: str
     new_password: str
+
+class UserEditSchema(BaseModel):
+    email: Optional[EmailStr] = None
+    service: Optional[str] = None
+    service_active_date: str = None
+
+    class Config:
+        orm_mode = True
+
+class PushNotification(BaseModel):
+    msg_title: str = None
+    msg_body: str = None
+    service: str = None
+
+    class Config:
+        orm_mode = True

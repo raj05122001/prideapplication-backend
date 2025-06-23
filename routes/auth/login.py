@@ -3,7 +3,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 from config import logger
-from db.schema import UserOut 
+from db.schema import UserOut, UserEditSchema
 # Import your DB session, models, and schemas
 from db.connection import get_db
 from db.models import UserDetails # Ensure UserDetails now has a 'password' field.
@@ -12,7 +12,10 @@ from routes.auth.otp_service import send_otp_msg_mail, verify_otp, validate_phon
 from routes.auth.JWTSecurity import create_access_token, create_refresh_token, save_refresh_token, verify_token
 from fastapi.responses import JSONResponse
 from datetime import datetime, timedelta
+from fastapi.security import OAuth2PasswordBearer
 
+# add at top, after your other imports
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 router = APIRouter(
     prefix="/auth",
@@ -234,3 +237,52 @@ def reset_password(
 def get_all_users(db: Session = Depends(get_db)):
     users = db.query(UserDetails).all()
     return users
+
+
+@router.put(
+    "/user/{phone}",
+    response_model=UserOut,
+    summary="Edit user profile by phone",
+)
+def edit_user(
+    phone: str,
+    edits: UserEditSchema,
+    db: Session = Depends(get_db),
+):
+    # 1. Fetch the user
+    user = db.query(UserDetails).filter(UserDetails.phone_number == phone).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    if edits.email is not None:
+        # ensure no other user has this email
+        conflict = (
+            db.query(UserDetails)
+            .filter(
+                UserDetails.email == edits.email,
+                UserDetails.phone_number != phone
+            )
+            .first()
+        )
+        if conflict:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already in use",
+            )
+        user.email = edits.email
+
+    if edits.service is not None:
+        user.service = edits.service
+
+    if edits.service_active_date is not None:
+        user.service_active_date = edits.service_active_date
+
+    # 3. Persist
+    db.commit()
+    db.refresh(user)
+
+    return user
+

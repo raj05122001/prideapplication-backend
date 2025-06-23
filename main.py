@@ -53,9 +53,6 @@ app.add_middleware(
 )
 
 
-# Serve Static Files
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
 @app.on_event("startup")
 async def on_startup():
     FastAPICache.init(
