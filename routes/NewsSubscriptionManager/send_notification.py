@@ -232,14 +232,22 @@ def send_notification_to_all(
     today_str = today.strftime('%Y-%m-%d')
 
     # 2. Fetch all eligible users
-    users = (
-        db.query(UserDetails)
-        .filter(
-            UserDetails.service == req.service,
-            UserDetails.service_active_date >= today_str
+    if req.service == "all":
+        users = (
+            db.query(UserDetails)
+            .filter(UserDetails.service_active_date >= today_str)
+            .all()
         )
-        .all()
-    )
+    else:
+        users = (
+            db.query(UserDetails)
+            .filter(
+                UserDetails.service == req.service,
+                UserDetails.service_active_date >= today_str
+            )
+            .all()
+        )
+
     if not users:
         raise HTTPException(status_code=404, detail="No active users found for this service.")
 
