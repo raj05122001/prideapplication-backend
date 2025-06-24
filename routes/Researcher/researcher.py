@@ -59,10 +59,12 @@ def update_option(db: Session, option_id: int, upd: OptionUpdate) -> Option:
 @router.post("/", response_model=OptionOut)
 async def add_option(option: OptionCreate, db: Session = Depends(get_db)):
     opt = create_option(db, option)
-    await manager.broadcast({
+    payload = {
         "action": "created",
         "option": OptionOut.from_orm(opt).model_dump(mode="json")
-    }, service=opt.service)
+    }
+    for svc in opt.service:
+        await manager.broadcast(payload, service=svc)
     return opt
 
 @router.get("/", response_model=List[OptionOut])
@@ -71,22 +73,18 @@ def list_options(skip: int = 0, limit: int = 100, db: Session = Depends(get_db))
 
 @router.get("/{phone}", response_model=List[OptionOut])
 def read_option(
-    phone: str,                # ← phone is now a string
+    phone: str,
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
 ):
-    user = (
-        db.query(UserDetails)
-          .filter(UserDetails.phone_number == phone)
-          .first()
-    )
+    user = db.query(UserDetails).filter(UserDetails.phone_number == phone).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     return (
         db.query(Option)
-          .filter(Option.service == user.service)
+          .filter(Option.service.any(user.service))   # ← only options whose service-array contains user.service
           .offset(skip)
           .limit(limit)
           .all()

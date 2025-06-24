@@ -9,7 +9,7 @@ DB_PORT = "5432"
 DB_NAME = "prideappdb"
 
 # psql -U pridenotification -d prideappdb -h localhost -p 5432
-# DROP TABLE user_details;   delete table
+# DROP TABLE researcher;   delete table
 
 
 # SQLAlchemy database URL

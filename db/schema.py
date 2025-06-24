@@ -58,28 +58,6 @@ class UserSignupSchema(BaseModel):
 class RefreshTokenRequest(BaseModel):
     token: str
 
-class OptionBase(BaseModel):
-    title: str = Field(..., example="Rapid Stock Option (…)") 
-    author: str = Field(..., example="Pradeep")
-    timestamp: datetime = Field(..., example="2025-06-11T10:27:40Z")
-    message: str = Field(..., example="OPTION:CALL BUY AARTIND 490 …")
-    service: str = Field(..., example="cash")
-
-class OptionCreate(OptionBase):
-    pass
-
-class OptionUpdate(BaseModel):
-    title: Optional[str]
-    author: Optional[str]
-    timestamp: Optional[datetime]
-    message: Optional[str]
-    service: str = Field(..., example="cash")
-
-class OptionOut(OptionBase):
-    id: int
-
-    model_config = ConfigDict(from_attributes=True)
-
 class PasswordReset(BaseModel):
     phone_number: str = Field(..., pattern=r"^\d{10}$")
     otp: str
@@ -100,3 +78,25 @@ class PushNotification(BaseModel):
 
     class Config:
         orm_mode = True
+
+class OptionBase(BaseModel):
+    title: str
+    author: str
+    message: str
+    service: List[str]
+
+class OptionCreate(OptionBase):
+    pass
+
+class OptionUpdate(BaseModel):
+    title: Optional[str]          = None
+    author: Optional[str]         = None
+    message: Optional[str]        = None
+    service: Optional[List[str]]  = None
+
+class OptionOut(OptionBase):
+    id: int
+    timestamp: datetime
+
+    # ← Pydantic v2 way to enable from_orm
+    model_config = ConfigDict(from_attributes=True)

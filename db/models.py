@@ -48,12 +48,12 @@ class TokenDetails(Base):
 class Option(Base):
     __tablename__ = "researcher"
 
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, nullable=False)
-    author = Column(String, nullable=False)
+    id        = Column(Integer, primary_key=True, index=True)
+    title     = Column(String, nullable=False)
+    author    = Column(String, nullable=False)
     timestamp = Column(DateTime(timezone=True), default=datetime.utcnow, nullable=False)
-    message = Column(Text, nullable=False)
-    service = Column(String, nullable=False)
+    message   = Column(Text, nullable=False)
+    service   = Column(ARRAY(String), nullable=False)
 
 class PushToken(Base):
     __tablename__ = "push_tokens"
