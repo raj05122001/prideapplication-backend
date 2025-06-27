@@ -18,6 +18,7 @@ from routes.auth import login
 from routes.Researcher import researcher
 from routes.Plan import CheckPlan
 from routes.NewsSubscriptionManager import NewsSubscriptionManager, send_notification
+from routes.payment import payments
 
 # Configure Logging
 logging.basicConfig(level=logging.INFO)
@@ -68,6 +69,7 @@ def read_root():
 
 
 # Registering Routes
+app.include_router(payments.router)
 app.include_router(login.router)
 app.include_router(researcher.router)
 app.include_router(CheckPlan.router)
