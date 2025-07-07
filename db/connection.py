@@ -27,9 +27,6 @@ DATABASE_URL = (
     f"@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 )
 
-# (Optional) print to verify at startup—remove in production
-print("Connecting to:", DATABASE_URL)
-
 # Create engine
 engine = create_engine(DATABASE_URL, echo=True)
 
