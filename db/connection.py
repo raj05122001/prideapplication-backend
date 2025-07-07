@@ -4,33 +4,42 @@ from urllib.parse import quote_plus
 from dotenv import load_dotenv
 import os
 
+# load .env into os.environ
 load_dotenv()
 
-DB_HOST = os.getenv("DB_HOST")
-DB_PORT = 5432
-DB_NAME = os.getenv("DB_NAME")
-DB_USERNAME = os.getenv("DB_USERNAME")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
+# Fetch with sensible defaults
+DB_HOST     = os.getenv("DB_HOST", "localhost")
+DB_PORT     = os.getenv("DB_PORT", "5432")
+DB_NAME     = os.getenv("DB_NAME", "")
+DB_USERNAME = os.getenv("DB_USERNAME", "")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "")
 
+# If somehow loaded as bytes, decode to str
+if isinstance(DB_PASSWORD, (bytes, bytearray)):
+    DB_PASSWORD = DB_PASSWORD.decode("utf-8")
+
+# Quote the password for URL safety
 pw_quoted = quote_plus(DB_PASSWORD)
 
+# Build the SQLAlchemy URL
 DATABASE_URL = (
-    f"postgresql://"
-    f"{DB_USERNAME}:{pw_quoted}"
+    f"postgresql://{DB_USERNAME}:{pw_quoted}"
     f"@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 )
 
-print(DATABASE_URL)
+# (Optional) print to verify at startup—remove in production
+print("Connecting to:", DATABASE_URL)
 
+# Create engine
 engine = create_engine(DATABASE_URL, echo=True)
 
-# Create a session
+# Session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Base class for models
 Base = declarative_base()
 
-# Dependency to get the database session
+# Dependency for FastAPI routes
 def get_db():
     db = SessionLocal()
     try:
