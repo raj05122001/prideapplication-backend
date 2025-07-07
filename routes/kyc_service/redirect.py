@@ -75,6 +75,8 @@ async def redirect_route(response: Response,platform: str, UUID_id: str, db: Ses
     set_cors_allow_all(response)
     if platform == "pridecons":
         redirect_url = f"https://pridecons.com/web/download_agreement/{UUID_id}"
+    elif platform == "service":
+        redirect_url = f"https://service.pridecons.sbs/kyc/agreement/{UUID_id}"
     else:
         redirect_url = f"https://pridebuzz.in/kyc/agreement/{UUID_id}"
 
