@@ -192,3 +192,23 @@ class OTP(BaseModel):
 
     class Config:
         orm_mode = True
+
+class CustomerDetails(BaseModel):
+    customer_id:    int
+    customer_email: str
+    customer_phone: str
+
+    # replace orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CreateOrderRequest(BaseModel):
+    order_amount:      float
+    order_currency:    str                   = Field("INR", min_length=3, max_length=3)
+    customer_details:  CustomerDetails
+    order_note:        str | None            = None
+    payment_type:      str | None            = None
+    payment_status:    str | None            = None
+    timestamp:         datetime              = Field(default_factory=datetime.utcnow)
+
+    model_config = ConfigDict(from_attributes=True)
