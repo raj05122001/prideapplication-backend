@@ -233,6 +233,18 @@ def reset_password(
 
     return {"message": "Password reset successful. You can now log in with your new password."}
 
+@router.delete("/users/{phone}", summary="Delete a user by phone number")
+def delete_user_by_phone(phone: str, db: Session = Depends(get_db)):
+    user = db.query(UserDetails).filter(UserDetails.phone_number == phone).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+    db.delete(user)
+    db.commit()
+    return {"message": "User deleted successfully"}
+
 @router.get("/users", summary="Get all users", response_model=list[UserOut])
 def get_all_users(db: Session = Depends(get_db)):
     users = db.query(UserDetails).all()

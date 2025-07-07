@@ -58,28 +58,6 @@ class UserSignupSchema(BaseModel):
 class RefreshTokenRequest(BaseModel):
     token: str
 
-class OptionBase(BaseModel):
-    title: str = Field(..., example="Rapid Stock Option (…)") 
-    author: str = Field(..., example="Pradeep")
-    timestamp: datetime = Field(..., example="2025-06-11T10:27:40Z")
-    message: str = Field(..., example="OPTION:CALL BUY AARTIND 490 …")
-    service: str = Field(..., example="cash")
-
-class OptionCreate(OptionBase):
-    pass
-
-class OptionUpdate(BaseModel):
-    title: Optional[str]
-    author: Optional[str]
-    timestamp: Optional[datetime]
-    message: Optional[str]
-    service: str = Field(..., example="cash")
-
-class OptionOut(OptionBase):
-    id: int
-
-    model_config = ConfigDict(from_attributes=True)
-
 class PasswordReset(BaseModel):
     phone_number: str = Field(..., pattern=r"^\d{10}$")
     otp: str
@@ -97,6 +75,120 @@ class PushNotification(BaseModel):
     msg_title: str = None
     msg_body: str = None
     service: str = None
+
+    class Config:
+        orm_mode = True
+
+class OptionBase(BaseModel):
+    title: str
+    author: str
+    message: str
+    service: List[str]
+
+class OptionCreate(OptionBase):
+    pass
+
+class OptionUpdate(BaseModel):
+    title: Optional[str]          = None
+    author: Optional[str]         = None
+    message: Optional[str]        = None
+    service: Optional[List[str]]  = None
+
+class OptionOut(OptionBase):
+    id: int
+    timestamp: datetime
+
+    # ← Pydantic v2 way to enable from_orm
+    model_config = ConfigDict(from_attributes=True)
+
+
+# CategoryType = Literal["Nifty 50", "Sensex", "Bank Nifty"]
+ActionType = Literal["Buy", "Sell", "Hold"]
+TradeType = Literal["Intraday", "Positional", "Swing", "Momentum"]
+OptionType = Literal["Call", "Put"]
+
+
+class KYCOTPRequest(BaseModel):
+    mobile: str
+    email: EmailStr
+
+class KYCOTPVerifyRequest(BaseModel):
+    mobile: str
+    email: EmailStr
+    otp: str
+
+class KYCDetails(BaseModel):
+    # Use UUID_id (generated during OTP verification) as the identifier for updating details.
+    UUID_id: str  
+    full_name: str
+    father_name: str
+    alternate_mobile: str
+    dob: date
+    age: int
+    nationality: str
+    pan_no: str
+    aadhaar_no: str
+    gender: str
+    marital_status: str
+    state: str
+    city: str
+    address: str
+    pin_code: str
+    occupation: str
+    user_image: str
+    director_name: str
+    gst_no: str
+    gst_pdf: str
+    step_first: bool
+    step_second: bool
+    step_third: bool
+    step_four: bool
+    signature_url: str
+    complete_signature_url: str
+    faild_error: str
+    # esign_pdf: Optional[str] = None
+
+class KYCDetails(BaseModel):
+    UUID_id: str  
+    mobile: str
+    email: EmailStr
+    full_name: Optional[str] = None
+    father_name: Optional[str] = None
+    alternate_mobile: Optional[str] = None
+    dob: Optional[date] = None
+    age: Optional[int] = None
+    nationality: Optional[str] = None
+    pan_no: Optional[str] = None
+    aadhaar_no: Optional[str] = None
+    gender: Optional[str] = None
+    marital_status: Optional[str] = None
+    state: Optional[str] = None
+    city: Optional[str] = None
+    address: Optional[str] = None
+    pin_code: Optional[str] = None
+    occupation: Optional[str] = None
+    user_image: Optional[str] = None
+    esign_pdf: Optional[str] = None
+    group_id: Optional[str] = None
+    director_name: Optional[str] = None
+    gst_no: Optional[str] = None
+    gst_pdf: Optional[str] = None
+    step_first: Optional[bool] = None
+    step_second: Optional[bool] = None
+    step_third: Optional[bool] = None
+    step_four: Optional[bool] = None
+    signature_url: Optional[str] = None
+    complete_signature_url: Optional[str] = None
+    faild_error: Optional[str] = None
+
+    class Config:
+        orm_mode = True
+
+class OTP(BaseModel):
+    id: int
+    mobile: str
+    otp: int
+    timestamp: datetime
 
     class Config:
         orm_mode = True

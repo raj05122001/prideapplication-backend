@@ -14,10 +14,19 @@ from db import models
 import os
 import json
 
+# Importing all routers
+from routes.Pan_verification import PanVerification
+from routes.kyc_service import kyc_verification, redirect
+from routes.E_Stamp import eStamp
+from routes.convert_xml_to_pdf import convert_xml_to_pdf
+
+from routes.mail_service import bulk_mail
+
 from routes.auth import login
 from routes.Researcher import researcher
 from routes.Plan import CheckPlan
 from routes.NewsSubscriptionManager import NewsSubscriptionManager, send_notification
+from routes.payment import payments
 
 # Configure Logging
 logging.basicConfig(level=logging.INFO)
@@ -53,6 +62,10 @@ app.add_middleware(
 )
 
 
+# Serve Static Files
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
 @app.on_event("startup")
 async def on_startup():
     FastAPICache.init(
@@ -68,12 +81,18 @@ def read_root():
 
 
 # Registering Routes
+app.include_router(eStamp.router)
+app.include_router(PanVerification.router)
+app.include_router(bulk_mail.router)
+app.include_router(convert_xml_to_pdf.router)
+app.include_router(kyc_verification.router)
+app.include_router(redirect.router)
+app.include_router(payments.router)
 app.include_router(login.router)
 app.include_router(researcher.router)
 app.include_router(CheckPlan.router)
 app.include_router(NewsSubscriptionManager.router)
 app.include_router(send_notification.router)
-
 
 # Database Table Creation
 try:
