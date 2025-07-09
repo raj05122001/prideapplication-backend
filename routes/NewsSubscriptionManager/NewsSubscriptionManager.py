@@ -48,7 +48,7 @@ def register_token(
         )
         if db_token:
             db_token.token = payload.push_token
-            db.refresh(db_token)
+            db.add(db_token)  # ensures SQLAlchemy tracks changes
         else:
             db_token = PushToken(
                 user_id=payload.user_id,

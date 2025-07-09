@@ -22,7 +22,7 @@ class UserDetails(Base):
     name = Column(String(100), nullable=False)
     password = Column(String(255), nullable=False)  # Hashed password storage.
     role = Column(String(10), default="user", nullable=False)  # Default role is 'user'.
-    service = Column(String(100), nullable=False)
+    service = Column(ARRAY(String(100)), nullable=False, default=list)
     service_active_date = Column(String(100), nullable=True, default=None)
 
     
@@ -41,7 +41,7 @@ class TokenDetails(Base):
     user_id = Column(String(10), ForeignKey("user_details.phone_number", ondelete="CASCADE"), nullable=False)
     refresh_token = Column(String, unique=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
     # Relationship back to the user.
     user = relationship("UserDetails", back_populates="tokens")
 

@@ -242,7 +242,7 @@ def send_notification_to_all(
         users = (
             db.query(UserDetails)
             .filter(
-                UserDetails.service == req.service,
+                UserDetails.service.any(req.service),
                 UserDetails.service_active_date >= today_str
             )
             .all()

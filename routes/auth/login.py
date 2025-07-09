@@ -68,9 +68,14 @@ def login_email(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
     access_token = create_access_token({"sub": user.email, "role": user.role, "phone_number": user.phone_number, "name": user.name, "service": user.service, "service_active_date": user.service_active_date})
     refresh_token = create_refresh_token(user.phone_number)  # using phone as unique id for refresh tokens
     save_refresh_token(db, user.phone_number, refresh_token)
-    
-    return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
 
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "service": user.service,
+        "service_active_date": user.service_active_date,
+    }
 
 @router.post("/send-otp", summary="Send OTP for Phone Login")
 async def send_otp_endpoint(data: OTPRequest,background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
@@ -85,10 +90,7 @@ async def send_otp_endpoint(data: OTPRequest,background_tasks: BackgroundTasks, 
     user = db.query(UserDetails).filter(UserDetails.phone_number == phone_number).first()
     if not user:
         raise HTTPException(status_code=404, detail="Phone number not registered. Please register first.")
-    
-    otp_response = await send_otp_msg_mail(phone_number,background_tasks, db, UserDetails.email)
-    return otp_response
-
+    return await send_otp_msg_mail(phone_number, background_tasks, db, user.email)
 
 @router.post("/verify-otp", summary="Verify OTP for Registration or Login")
 def verify_otp_endpoint(data: OTPVerify, db: Session = Depends(get_db)):
@@ -108,11 +110,12 @@ def verify_otp_endpoint(data: OTPVerify, db: Session = Depends(get_db)):
     if phone_number in pending_registrations:
         reg_data = pending_registrations.pop(phone_number)
         hashed_password = pwd_context.hash(reg_data["password"])
+        raw_service = reg_data.get("service", [])
         new_user = UserDetails(
             phone_number=reg_data["phone_number"],
             email=reg_data["email"],
             name=reg_data["name"],
-            service=reg_data["service"],
+            service = [raw_service] if isinstance(raw_service, str) else raw_service,
             password=hashed_password,
             role="user",  # default role for regular users
             service_active_date=(
@@ -280,10 +283,7 @@ def edit_user(
             .first()
         )
         if conflict:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already in use",
-            )
+            raise HTTPException(status_code=400, detail="Email already in use")
         user.email = edits.email
 
     if edits.service is not None:

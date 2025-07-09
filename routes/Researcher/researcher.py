@@ -72,11 +72,11 @@ def list_options(skip: int = 0, limit: int = 100, db: Session = Depends(get_db))
     return get_options(db, skip=skip, limit=limit)
 
 @router.get("/{phone}", response_model=List[OptionOut])
-def read_option(
+def read_options_by_user(
     phone: str,
     skip: int = 0,
     limit: int = 100,
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db)
 ):
     user = db.query(UserDetails).filter(UserDetails.phone_number == phone).first()
     if not user:
@@ -84,7 +84,7 @@ def read_option(
 
     return (
         db.query(Option)
-          .filter(Option.service.any(user.service))   # ← only options whose service-array contains user.service
+          .filter(Option.service.op('&&')(user.service))
           .offset(skip)
           .limit(limit)
           .all()
@@ -93,47 +93,42 @@ def read_option(
 @router.put("/{option_id}", response_model=OptionOut)
 async def edit_option(option_id: int, upd: OptionUpdate, db: Session = Depends(get_db)):
     opt = update_option(db, option_id, upd)
-    await manager.broadcast({
+    payload = {
         "action": "updated",
         "option": OptionOut.from_orm(opt).model_dump(mode="json")
-    }, service=opt.service)
+    }
+    for svc in opt.service:
+        await manager.broadcast(payload, service=svc)
     return opt
 
 @router.delete("/{option_id}", response_model=OptionOut)
 async def delete_option(option_id: int, db: Session = Depends(get_db)):
-    """
-    Delete an Option by its ID, then broadcast a 'deleted' event on its service channel.
-    """
-    # fetch (or 404)
     opt = get_option(db, option_id)
-    # serialize before removal
     payload = OptionOut.from_orm(opt).model_dump(mode="json")
-    service = opt.service
+    services = opt.service
 
-    # delete and commit
     db.delete(opt)
     db.commit()
 
-    # notify subscribers
-    await manager.broadcast({
-        "action": "deleted",
-        "option": payload
-    }, service=service)
+    for svc in services:
+        await manager.broadcast({
+            "action": "deleted",
+            "option": payload
+        }, service=svc)
 
     return opt
 
-# --- WebSocket endpoint for service‐scoped live updates ---
+# --- WebSocket Endpoint for Live Updates ---
 @router.websocket("/ws/options/{service}")
 async def websocket_options_endpoint(websocket: WebSocket, service: str):
     """
     Subscribe here to receive live updates for a given service.
     Messages will be of the form:
-      { action: "created"|"updated", option: { ...OptionOut fields... } }
+      { action: "created"|"updated"|"deleted", option: { ... } }
     """
     await manager.connect(websocket, service)
     try:
         while True:
-            # keep the connection alive; ignore incoming messages
             await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(websocket, service)

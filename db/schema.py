@@ -1,8 +1,7 @@
 from pydantic import BaseModel, Field, validator, EmailStr
-from typing import List, Optional, Literal
+from typing import List, Optional, Literal, Union
 from datetime import datetime, date
 from pydantic import ConfigDict
-
 
 from random import randint
 
@@ -11,7 +10,7 @@ class UserOut(BaseModel):
     name: str
     phone_number: str
     role: str
-    service: str
+    service: Union[str, List[str]]
     email: EmailStr
     created_at: datetime
     service_active_date: str
@@ -32,7 +31,7 @@ class OTPVerify(BaseModel):
 # Schema for user registration with phone, email, and password.
 class UserSignupSchema(BaseModel):
     name: str = Field(..., example="John")
-    service: str = Field(..., example="cash")
+    service: Union[str, List[str]] = Field(..., example=["cash", "equity"])
     country_code: str = Field(
         ..., 
         pattern=r"^\+\d{1,4}$", 
@@ -65,7 +64,7 @@ class PasswordReset(BaseModel):
 
 class UserEditSchema(BaseModel):
     email: Optional[EmailStr] = None
-    service: Optional[str] = None
+    service: Optional[Union[str, List[str]]] = None
     service_active_date: str = None
 
     class Config:
@@ -74,7 +73,7 @@ class UserEditSchema(BaseModel):
 class PushNotification(BaseModel):
     msg_title: str = None
     msg_body: str = None
-    service: str = None
+    service: Union[str, List[str]] = None
 
     class Config:
         orm_mode = True
@@ -92,7 +91,7 @@ class OptionUpdate(BaseModel):
     title: Optional[str]          = None
     author: Optional[str]         = None
     message: Optional[str]        = None
-    service: Optional[List[str]]  = None
+    service: Optional[Union[str, List[str]]] = None
 
 class OptionOut(OptionBase):
     id: int
@@ -116,37 +115,6 @@ class KYCOTPVerifyRequest(BaseModel):
     mobile: str
     email: EmailStr
     otp: str
-
-class KYCDetails(BaseModel):
-    # Use UUID_id (generated during OTP verification) as the identifier for updating details.
-    UUID_id: str  
-    full_name: str
-    father_name: str
-    alternate_mobile: str
-    dob: date
-    age: int
-    nationality: str
-    pan_no: str
-    aadhaar_no: str
-    gender: str
-    marital_status: str
-    state: str
-    city: str
-    address: str
-    pin_code: str
-    occupation: str
-    user_image: str
-    director_name: str
-    gst_no: str
-    gst_pdf: str
-    step_first: bool
-    step_second: bool
-    step_third: bool
-    step_four: bool
-    signature_url: str
-    complete_signature_url: str
-    faild_error: str
-    # esign_pdf: Optional[str] = None
 
 class KYCDetails(BaseModel):
     UUID_id: str  
