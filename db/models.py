@@ -32,6 +32,15 @@ class UserDetails(Base):
     # Relationship to refresh tokens.
     tokens = relationship("TokenDetails", back_populates="user", cascade="all, delete-orphan")
 
+class AdminUserDetails(Base):
+    __tablename__ = "admin_details"
+    
+    email = Column(String(100), primary_key=True, unique=True, nullable=False, index=True)
+    name = Column(String(100), nullable=False)
+    password = Column(String(255), nullable=False)  # Hashed password storage.
+    role = Column(String(10), default="user", nullable=False)  # Default role is 'user'.
+
+
 class TokenDetails(Base):
     __tablename__ = "token_details"
     

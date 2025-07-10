@@ -23,6 +23,7 @@ from routes.convert_xml_to_pdf import convert_xml_to_pdf
 from routes.mail_service import bulk_mail
 
 from routes.auth import login
+from routes.auth import admin_login
 from routes.Researcher import researcher
 from routes.Plan import CheckPlan
 from routes.NewsSubscriptionManager import NewsSubscriptionManager, send_notification
@@ -81,6 +82,7 @@ def read_root():
 
 
 # Registering Routes
+app.include_router(admin_login.router)
 app.include_router(eStamp.router)
 app.include_router(PanVerification.router)
 app.include_router(bulk_mail.router)

@@ -52,6 +52,13 @@ class UserSignupSchema(BaseModel):
         if len(v) != 10:
             raise ValueError("Phone number must be exactly 10 digits")
         return v
+    
+class AdminUserSignupSchema(BaseModel):
+    name: str = Field(..., example="John")
+    role: str = Field(..., example="ADMIN")
+    email: EmailStr
+    password: str = Field(..., min_length=6, example="secret123")
+
 
 # Schema for requesting a new access token via refresh token.
 class RefreshTokenRequest(BaseModel):
