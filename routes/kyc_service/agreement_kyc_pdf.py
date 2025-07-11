@@ -971,7 +971,7 @@ async def generate_kyc_pdf(data,UUID_id:str,db:Session = Depends(get_db)):
               <td>Customer Care</td>
               <td>Ms. Anjali</td>
               <td>Vadodara, Gujarat</td>
-              <td>+91-8141054547</td>
+              <td>+91-9981919424</td>
               <td>compliance@pridecons.com</td>
               <td>Mon-Fri 10 AM – 05 PM</td>
             </tr>
@@ -979,7 +979,7 @@ async def generate_kyc_pdf(data,UUID_id:str,db:Session = Depends(get_db)):
               <td>Compliance Officer</td>
               <td>Mr. Ajay Kumar</td>
               <td>Vadodara, Gujarat</td>
-              <td>+91-8141054547</td>
+              <td>+91-9981919424</td>
               <td>compliance@pridecons.com</td>
               <td>Mon-Fri 10 AM – 05 PM</td>
             </tr>
@@ -987,7 +987,7 @@ async def generate_kyc_pdf(data,UUID_id:str,db:Session = Depends(get_db)):
               <td>Principal Officer</td>
               <td>Ms. Apeksha Bansal</td>
               <td>Vadodara, Gujarat</td>
-              <td>+91-8141054547</td>
+              <td>+91-9981919424</td>
               <td>info.prideconsultancy@gmail.com</td>
               <td>Mon-Fri 09 AM – 05 PM</td>
             </tr>
@@ -1109,7 +1109,7 @@ async def generate_kyc_pdf(data,UUID_id:str,db:Session = Depends(get_db)):
     pride_logo = "logo/pride-logo1.png"
     cin = "CIN: U67190GJ2022PTC130684"
     mail = "Mail:- compliance@pridecons.com"
-    call = "Call:- +91-8141054547"
+    call = "Call:- +91-9981919424"
     
     overlay_pdf = PdfReader(BytesIO(pdf_bytes))
     

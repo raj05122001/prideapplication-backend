@@ -438,7 +438,7 @@ async def init_estamp(
     pride_logo = "logo/pride-logo1.png"
     cin = "CIN: U67190GJ2022PTC130684"
     mail = "Mail:- compliance@pridecons.com"
-    call = "Call:- +91-8141054547"
+    call = "Call:- +91-9981919424"
         
     # Create a PdfWriter object and add each page after overlaying the header, watermark, and footer
     output_pdf = PdfWriter()
