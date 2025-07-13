@@ -142,3 +142,37 @@ class EStamp(Base):
     mobile = Column(String(20), nullable=False)
     # Here we store the file information as a string (e.g., file path or base64 encoded text).
     file = Column(String, nullable=True)
+
+
+class Payment(Base):
+    __tablename__ = "crm_payment"
+
+    id               = Column(Integer, primary_key=True, autoincrement=True)
+    name             = Column(String(100), nullable=False)
+    email            = Column(String(100), nullable=False)
+    phone_number     = Column(Text, nullable=False)
+    # ← make this a String so it can hold "order_xxx"
+    order_id         = Column(String(100), nullable=True, index=True)
+
+    Service          = Column(String(50), nullable=True)
+    paid_amount      = Column(Float, nullable=False)
+    status           = Column(String(50), nullable=True)
+    mode             = Column(String(50), nullable=False)
+    is_send_invoice  = Column(Boolean, nullable=False, default=False)
+    description      = Column(Text, nullable=True)
+    transaction_id   = Column(String(100), nullable=True)
+    user_id          = Column(Integer, nullable=True)
+    branch_id        = Column(Integer, nullable=True)
+
+    created_at       = Column(
+                         DateTime(timezone=True),
+                         server_default=func.now(),
+                         nullable=False
+                      )
+
+    # foreign key to Lead, many payments per lead
+    lead_id          = Column(Integer, ForeignKey("crm_lead.id"), nullable=True)
+    lead             = relationship("Lead", back_populates="payments")
+
+
+    
