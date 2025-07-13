@@ -144,6 +144,58 @@ class EStamp(Base):
     file = Column(String, nullable=True)
 
 
+class Lead(Base):
+    __tablename__ = "crm_lead"
+
+    id                = Column(Integer, primary_key=True, autoincrement=True)
+    full_name         = Column(String(100), nullable=True)
+    father_name       = Column(String(100), nullable=True)
+    email             = Column(String(100), nullable=True, index=True)
+    mobile            = Column(String(20), nullable=True, index=True)
+    alternate_mobile  = Column(String(20), nullable=True)
+    aadhaar           = Column(String(12), nullable=True)
+    pan               = Column(String(10), nullable=True)
+    gstin             = Column(String(15), nullable=True)
+
+    state             = Column(String(100), nullable=True)
+    city              = Column(String(100), nullable=True)
+    district          = Column(String(100), nullable=True)
+    address           = Column(Text, nullable=True)
+
+    dob               = Column(Date, nullable=True)
+    occupation        = Column(String(100), nullable=True)
+    segment           = Column(Text, nullable=True)  # Store as JSON string
+    experience        = Column(String(50), nullable=True)
+    investment        = Column(String(50), nullable=True)
+
+    lead_response_id  = Column(Integer, ForeignKey("crm_lead_response.id"), nullable=True)
+    lead_source_id    = Column(Integer, ForeignKey("crm_lead_source.id"), nullable=True)
+
+    created_by        = Column(String(100), nullable=True)
+    created_by_name   = Column(String(100), nullable=True)
+    comment           = Column(Text, nullable=True)  # Store as JSON string
+
+    aadhar_front_pic  = Column(String(255), nullable=True)
+    aadhar_back_pic   = Column(String(255), nullable=True)
+    pan_pic           = Column(String(255), nullable=True)
+    kyc               = Column(Boolean, default=False, nullable=True)
+    kyc_id            = Column(Integer, nullable=True)
+
+    is_old_lead       = Column(Boolean, default=False, nullable=True)
+    call_back_date    = Column(DateTime, nullable=True)
+    lead_status       = Column(String(50), nullable=True)
+
+    created_at        = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    branch_id         = Column(Integer, ForeignKey("crm_branch_details.id"), nullable=True)
+
+    branch            = relationship("BranchDetails", back_populates="leads")
+    payments      = relationship("Payment", back_populates="lead")
+    stories           = relationship("LeadStory", back_populates="lead", cascade="all, delete-orphan")
+    lead_source       = relationship("LeadSource", back_populates="leads")
+    lead_response     = relationship("LeadResponse", back_populates="leads")
+    assignment = relationship("LeadAssignment", back_populates="lead", uselist=False)
+ 
+
 class Payment(Base):
     __tablename__ = "crm_payment"
 
@@ -175,4 +227,3 @@ class Payment(Base):
     lead             = relationship("Lead", back_populates="payments")
 
 
-    
