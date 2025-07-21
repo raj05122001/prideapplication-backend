@@ -7,6 +7,9 @@ from db.schema import OptionOut, OptionCreate, OptionUpdate
 from db.models import Option, UserDetails
 import json
 
+from fastapi.responses import StreamingResponse
+import httpx
+
 router = APIRouter(prefix="/researcher", tags=["researcher"])
 
 # --- Connection manager for WebSockets, grouped by service ---
@@ -85,6 +88,7 @@ def read_options_by_user(
     return (
         db.query(Option)
           .filter(Option.service.op('&&')(user.service))
+          .order_by(Option.timestamp.desc())
           .offset(skip)
           .limit(limit)
           .all()
@@ -132,3 +136,27 @@ async def websocket_options_endpoint(websocket: WebSocket, service: str):
             await websocket.receive_text()
     except WebSocketDisconnect:
         manager.disconnect(websocket, service)
+
+@router.get("/files/{file_key}", summary="Proxy a file from CloudFront")
+async def fetch_researcher_file(file_key: str):
+    # 1️⃣ Build the CF URL
+    url = f"https://d12p872xp7spmg.cloudfront.net/{file_key}"
+
+    # 2️⃣ Stream the remote response
+    async with httpx.AsyncClient(timeout=None) as client:
+        resp = await client.get(url)
+        if resp.status_code != 200:
+            raise HTTPException(status_code=resp.status_code, detail="File not found")
+
+        # 3️⃣ Grab the remote content-type (fallback to octet-stream)
+        content_type = resp.headers.get("content-type", "application/octet-stream")
+
+        # 4️⃣ Return a streaming response
+        return StreamingResponse(
+            resp.aiter_bytes(),
+            media_type=content_type,
+            headers={
+                # Optional: force download filename
+                "Content-Disposition": f'attachment; filename="{file_key}"'
+            }
+        )

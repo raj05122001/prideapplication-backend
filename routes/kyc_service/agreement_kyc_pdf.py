@@ -1,37 +1,22 @@
 from fastapi import APIRouter,Depends, HTTPException
 import httpx
-from fastapi.responses import FileResponse
 from weasyprint import HTML
 from PyPDF2 import PdfReader, PdfWriter
-from io import BytesIO, StringIO
+from io import BytesIO
 import base64
 import os
 from sqlalchemy.orm import Session
 from db.connection import get_db
 import asyncio
 from config import PAN_API_ID, PAN_API_KEY
-
 from reportlab.pdfgen import canvas
 from reportlab.pdfgen import canvas as rl_canvas
 import tempfile
 from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
 from pyhanko.sign import signers, PdfSignatureMetadata
 from pyhanko.sign.fields import SigFieldSpec
-
 from db.models import KYCUser
-
 from typing import Any, Dict, Optional
-
-from config import AWS_ACCESS_KEY, AWS_SECRET_KEY, AWS_REGION
-import aioboto3
-from fastapi.responses import StreamingResponse
-from config import PAN_API_ID, PAN_API_KEY
-from routes.mail_service.kyc_agreement_mail import send_agreement
-from botocore.exceptions import ClientError
-import io
-
-
-S3_BUCKET_NAME="pride-user-data"
 
 router = APIRouter(tags=["Agreement KYC"])
 
@@ -263,50 +248,6 @@ def image_tag(base64_str, mime="jpeg", width=200, height=250):
     if base64_str:
         return f'<img src="data:image/{mime};base64,{base64_str}" style="width:{width}px; object-fit: fill; height:{height}px;" />'
     return "<p style='color:red;'>[Image missing]</p>"
-
-async def write_pdf_to_s3(pdf_bytes: bytes, key: str):
-    """
-    Asynchronously upload a PDF file to S3.
-    
-    :param pdf_bytes: The binary content of the PDF file.
-    :param key: The S3 object key (file path in S3).
-    """
-    session = aioboto3.Session()
-    
-    async with session.client(
-        "s3",
-        aws_access_key_id=AWS_ACCESS_KEY,
-        aws_secret_access_key=AWS_SECRET_KEY,
-        region_name=AWS_REGION
-    ) as s3_client:
-        await s3_client.put_object(
-            Bucket=S3_BUCKET_NAME,  # Use the actual bucket name
-            Key=key,
-            Body=pdf_bytes,
-            ContentType="application/pdf"  # Correct MIME type for PDF
-        )
-    
-    print(f"✅ Uploaded {key} to s3://{S3_BUCKET_NAME}/{key}")
-
-async def check_file_exists(key: str) -> bool:
-    try:
-        session = aioboto3.Session()
-        async with session.client(
-            "s3",
-            aws_access_key_id=AWS_ACCESS_KEY,
-            aws_secret_access_key=AWS_SECRET_KEY,
-            region_name=AWS_REGION
-        ) as s3_client:
-            # Await the asynchronous call to head_object
-            await s3_client.head_object(Bucket=S3_BUCKET_NAME, Key=key)
-            return True
-    except ClientError as e:
-        # Check if the error code corresponds to a missing key
-        if e.response['Error']['Code'] == "404":
-            return False
-        # For other errors, re-raise the exception
-        raise      
-
 
 async def generate_kyc_pdf(data,UUID_id:str,db:Session = Depends(get_db)):
     kyc_user = db.query(KYCUser).filter(KYCUser.UUID_id == UUID_id).first()
@@ -887,74 +828,38 @@ async def generate_kyc_pdf(data,UUID_id:str,db:Session = Depends(get_db)):
           </p>
           <h2>Most Important Terms and Conditions (MITC)</h2>
           <p>
-            1. These terms and conditions, and consent thereon are for the research
-            services provided by the Research Analyst (RA) and RA cannot
-            execute/carry out any trade (purchase/sell transaction) on behalf of the
-            client. Thus, the clients are advised not to permit RA to execute any
-            trade on their behalf.
+            1.	These terms and conditions, and consent thereon are for the research services provided by the Research Analyst (RA) and RA cannot execute/carry out any trade (purchase/sell transaction) on behalf of, the client. Thus, the clients are advised not to permit RA to execute any trade on their behalf.
           </p>
           <p>
-            2. The fee charged by RA to the client will be subject to the maximum of
-            amount prescribed by SEBI/ Research Analyst Administration and
-            Supervisory Body (RAASB) from time to time (applicable only for
-            Individual and HUF Clients).
+            2.	The fee charged by RA to the client will be subject to the maximum of amount prescribed by SEBI/ Research Analyst Administration and Supervisory Body (RAASB) from time to time (applicable only for Individual and HUF Clients).
           </p>
           <p>
-            ● 2.1. The current fee limit is Rs 1,51,000/- per annum per family of
-            client for all research services of the RA.
+            ● 2.1.	The current fee limit is Rs 1,51,000/- per annum per family of client for all research services of the RA.
           </p>
-          <p>● 2.2. The fee limit does not include statutory charges.</p>
+          <p>● 2.2.	The fee limit does not include statutory charges.</p>
           <p>
-            ● 2.3. The fee limits do not apply to a non-individual client /
-            accredited investor.
+            ● 2.3.	The fee limits do not apply to a non-individual client / accredited investor.
           </p>
           <p>
-            3. RA may charge fees in advance if agreed by the client. Such advance
-            shall not exceed the period stipulated by SEBI; presently it is one
-            quarter. In case of pre-mature termination of the RA services by either
-            the client or the RA, the client shall be entitled to seek refund of
-            proportionate fees only for unexpired period.
+            3.	RA may charge fees in advance if agreed by the client. Such advance shall not exceed the period stipulated by SEBI; presently it is one Year. In case of pre-mature termination of the RA services by either the client or the RA, the client shall be entitled to seek refund of proportionate fees only for unexpired period.
           </p>
           <p>
-            4. Fees to RA may be paid by the client through any of the specified
-            modes like cheque, online bank transfer, UPI, etc. Cash payment is not
-            allowed. Optionally the client can make payments through Centralized Fee
-            Collection Mechanism (CeFCoM) managed by BSE Limited (i.e. currently
-            recognized RAASB).
+            4.	Fees to RA may be paid by the client through any of the specified modes like cheque, online bank transfer, UPI, etc. Cash payment is not allowed. Optionally the client can make payments through Centralized Fee Collection Mechanism (CeFCoM) managed by BSE Limited (i.e. currently recognized RAASB).
           </p>
           <p>
-            5. The RA is required to abide by the applicable regulations/ circulars/
-            directions specified by SEBI and RAASB from time to time in relation to
-            disclosure and mitigation of any actual or potential conflict of
-            interest. The RA will endeavor to promptly inform the client of any
-            conflict of interest that may affect the services being rendered to the
-            client.
+            5.	The RA is required to abide by the applicable regulations/ circulars/ directions specified by SEBI and RAASB from time to time in relation to disclosure and mitigation of any actual or potential conflict of interest. The RA will endeavor to promptly inform the client of any conflict of interest that may affect the services being rendered to the client.
           </p>
           <p>
-            6. Any assured/guaranteed/fixed returns schemes or any other schemes of
-            similar nature are prohibited by law. No scheme of this nature shall be
-            offered to the client by the RA.
+           6.	Any assured/guaranteed/fixed returns schemes or any other schemes of similar nature are prohibited by law. No scheme of this nature shall be offered to the client by the RA.
           </p>
           <p>
-            7. The RA cannot guarantee returns, profits, accuracy, or risk-free
-            investments from the use of the RA’s research services. All opinions,
-            projections, estimates of the RA are based on the analysis of available
-            data under certain assumptions as of the date of preparation/publication
-            of research report.
+            7.	The RA cannot guarantee returns, profits, accuracy, or risk-free investments from the use of the RA’s research services. All opinions, projections, estimates of the RA are based on the analysis of available data under certain assumptions as of the date of preparation/publication of research report.
           </p>
           <p>
-            8. Any investment made based on recommendations in research reports are
-            subject to market risks, and recommendations do not provide any
-            assurance of returns. There is no recourse to claim any losses incurred
-            on the investments made based on the recommendations in the research
-            report. Any reliance placed on the research report provided by the RA
-            shall be as per the client’s own judgment and assessment of the
-            conclusions contained in the research report.
+            8.	Any investment made based on recommendations in research reports are subject to market risks, and recommendations do not provide any assurance of returns. There is no recourse to claim any losses incurred on the investments made based on the recommendations in the research report. Any reliance placed on the research report provided by the RA shall be as per the client’s own judgement and assessment of the conclusions contained in the research report.
           </p>
           <p>
-            9. The SEBI registration, Enlistment with RAASB, and NISM certification
-            do not guarantee the performance of the RA or assure any returns to the
-            client.
+            9.	The SEBI registration, Enlistment with RAASB, and NISM certification do not guarantee the performance of the RA or assure any returns to the client.
           </p>
           <h2>10. For any grievances, follow the steps below:</h2>
           <h3>Step 1: Contact the RA using the details below:</h3>
@@ -1005,13 +910,10 @@ async def generate_kyc_pdf(data,UUID_id:str,db:Session = Depends(get_db)):
             <a href="https://smartodr.in" style="text-decoration: none;" target="_blank">https://smartodr.in</a>
           </p>
           <p>
-            11. Clients are required to keep contact details, including email ID and
-            mobile number/s updated with the RA at all times.
+            11.	Clients are required to keep contact details, including email id and mobile number/s updated with the RA at all times.
           </p>
           <p>
-            12. The RA shall never ask for the client’s login credentials and OTPs
-            for the client’s Trading Account, Demat Account, and Bank Account. Never
-            share such information with anyone including the RA.
+            12.	The RA shall never ask for the client’s login credentials and OTPs for the client’s Trading Account Demat Account and Bank Account. Never share such information with anyone including RA.
           </p>
           
           <h2 style="text-align: center;">Details of Services</h2>
