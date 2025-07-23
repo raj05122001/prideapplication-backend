@@ -34,7 +34,7 @@ def check_plan(phone_number: str, db: Session = Depends(get_db)):
         }
     else:
         return {
-            "message": "⚠️ Your plan has expired. Please recharge to renew your access.",
+            "message": "⚠️ Your plan has expired. Please contact support at +91 9981919424 to renew.",
             "active": False,
             "service": user.service
         }
