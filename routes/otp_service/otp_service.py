@@ -51,10 +51,8 @@ async def _delete_otp_after(otp_id: int, delay_seconds: int = 1800):
     finally:
         db.close()
 
-async def send_otp_kyc(phone_number: str,background_tasks: BackgroundTasks,db: Session = Depends(get_db), email: str = None):
+async def _send_otp_messages(phone_number:str,background_tasks: BackgroundTasks, email:str = None, db: Session = Depends(get_db)):
     otp = random.randint(1000, 9999)
-    # validate_phone(phone_number)
-    # 2. Build your message
     msg = (
         f"Your otp for mobile mobile verification is {otp}  "
         "www.pridecons.com +91-8141054547 PRIDE TRADING CONSULTANCY PVT. LTD."
@@ -91,14 +89,22 @@ async def send_otp_kyc(phone_number: str,background_tasks: BackgroundTasks,db: S
 
     if email:
         await Otp_mail(email, otp)
-    
-    # 4. Save the OTP in the database
+
+        # 4. Save the OTP in the database
     db_obj = OTP(mobile=phone_number, otp=otp)
     db.add(db_obj)
     db.commit()
     db.refresh(db_obj)
      # 5. Schedule it for deletion in 30 minutes
     background_tasks.add_task(_delete_otp_after, db_obj.id, 30 * 60)
+
+
+async def send_otp_kyc(phone_number: str,background_tasks: BackgroundTasks,db: Session = Depends(get_db), email: str = None):
+    
+    # validate_phone(phone_number)
+    # 2. Build your message
+    background_tasks.add_task(_send_otp_messages,phone_number, background_tasks, email, db)
+    
 
     # 4. Return the OTP (for debugging; in prod you might omit this)
     return {
