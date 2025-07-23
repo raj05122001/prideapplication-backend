@@ -77,20 +77,39 @@ def login_email(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
         "service_active_date": user.service_active_date,
     }
 
-@router.post("/send-otp", summary="Send OTP for Phone Login")
-async def send_otp_endpoint(data: OTPRequest,background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+@router.post(
+    "/send-otp",
+    summary="Resend OTP for Registration or Login/Reset",
+)
+async def resend_otp(
+    data: OTPRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
     """
-    Sends an OTP to the given phone number.
+    If the phone number is in `pending_registrations`, we'll
+    resend the registration OTP; otherwise we'll check that
+    the user exists and resend a login/reset OTP.
     """
-    phone_number = data.phone_number
-    email = data.email
-    validate_phone(phone_number)
-    
-    # Ensure the user exists (registration is required)
-    user = db.query(UserDetails).filter(UserDetails.phone_number == phone_number).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Phone number not registered. Please register first.")
-    return await send_otp_msg_mail(phone_number, background_tasks, db, user.email)
+    phone = data.phone_number
+    validate_phone(phone)
+
+    # 1️⃣ Determine which e-mail to use
+    if phone in pending_registrations:
+        email = pending_registrations[phone]["email"]
+    else:
+        user = db.query(UserDetails).filter(UserDetails.phone_number == phone).first()
+        if not user:
+            # If no pending registration and no existing user, can't send
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Phone number not found. Please register first.",
+            )
+        email = user.email
+
+    # 2️⃣ Re‑use your helper to send (and schedule delete) exactly as before
+    return await send_otp_msg_mail(phone, background_tasks, db, email)
+
 
 @router.post("/verify-otp", summary="Verify OTP for Registration or Login")
 def verify_otp_endpoint(data: OTPVerify, db: Session = Depends(get_db)):
