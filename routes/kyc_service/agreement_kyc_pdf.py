@@ -407,8 +407,7 @@ async def generate_kyc_pdf(data,UUID_id:str,db:Session = Depends(get_db)):
 
           <h2 style="text-align:center; page-break-before: always; break-before: page;" >B. RESEARCH SERVICE AGREEMENT</h2>
           <p>
-            This Research Services Agreement is made on 26th day of March 2025
-            (date) between Pride Trading Consultancy Private Limited, which is a
+            This Research Services Agreement is made between client and Pride Trading Consultancy Private Limited, which is a
             SEBI registered Research Analyst having registration number INH000010362
             and having its registered office at 410-411 Serene Centrum Sevasi Road
             Gotri Vadodara Gujarat 390021 hereinafter called the Research Analyst.
