@@ -1124,7 +1124,7 @@ async def generate_kyc_pdf(data,UUID_id:str,db:Session = Depends(get_db)):
     }
 
     UUID_id=data.get("UUID_id")
-    platform=data.get("platform","pridebuzz")
+    platform=data.get("platform","service")
     payload = {
         "document": {
             "name": "Agreement Esigning",
