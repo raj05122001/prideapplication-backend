@@ -1134,8 +1134,8 @@ async def generate_kyc_pdf(data,UUID_id:str,db:Session = Depends(get_db)):
         "signers": [signers],
         "txn_expiry_min": "10080",
         "white_label": "N",
-        "redirect_url": f"https://pridecons.sbs/redirect/{platform}/{UUID_id}",
-        "response_url": f"https://pridecons.sbs/response_url/{UUID_id}",
+        "redirect_url": f"https://api.pridecons.sbs/redirect/{platform}/{UUID_id}",
+        "response_url": f"https://api.pridecons.sbs/response_url/{UUID_id}",
         "esign_type": "AADHAAR",
         "email_template": {
             "org_name": "Pride Trading Consultancy"

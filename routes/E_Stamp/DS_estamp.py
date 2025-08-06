@@ -121,8 +121,8 @@ async def init_estamp(documentUrl: str,UUID_id:str, db: Session = Depends(get_db
                 "signers": [signers],
                 "txn_expiry_min": "10080",
                 "white_label": "N",
-                "redirect_url": f"https://pridecons.sbs/settlement-redirect/{EStampUser.UUID_id}",
-                "response_url": f"https://pridecons.sbs/e-sign/response_url/{EStampUser.UUID_id}",
+                "redirect_url": f"https://api.pridecons.sbs/settlement-redirect/{EStampUser.UUID_id}",
+                "response_url": f"https://api.pridecons.sbs/e-sign/response_url/{EStampUser.UUID_id}",
                 "esign_type": "AADHAAR",
                 "email_template": {
                     "org_name": "Pride Trading Consultancy"

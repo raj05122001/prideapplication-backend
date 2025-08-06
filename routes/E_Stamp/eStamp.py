@@ -251,7 +251,7 @@ async def init_estamp(
         "articleId":          articleId,
         "considerationPrice": considerationPrice,
         "branchId":           branchId,
-        "responseUrl":        f"https://pridecons.sbs/e-stamp/response_url/{generated_uuid}",
+        "responseUrl":        f"https://api.pridecons.sbs/e-stamp/response_url/{generated_uuid}",
         "recepientEmail":     recepientEmail,
     }
 
@@ -502,8 +502,8 @@ async def init_estamp(
                 "signers": [signers],
                 "txn_expiry_min": "10080",
                 "white_label": "N",
-                "redirect_url": f"https://pridecons.sbs/settlement-redirect/{generated_uuid}",
-                "response_url": f"https://pridecons.sbs/e-sign/response_url/{generated_uuid}",
+                "redirect_url": f"https://api.pridecons.sbs/settlement-redirect/{generated_uuid}",
+                "response_url": f"https://api.pridecons.sbs/e-sign/response_url/{generated_uuid}",
                 "esign_type": "AADHAAR",
                 "email_template": {
                     "org_name": "Pride Trading Consultancy"
