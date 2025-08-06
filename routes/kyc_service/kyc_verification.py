@@ -8,23 +8,43 @@ from db.connection import get_db
 from routes.otp_service.otp_service import send_otp_kyc, verify_otp
 from db.schema import KYCOTPRequest, KYCOTPVerifyRequest, KYCDetails
 from routes.kyc_service.agreement_kyc_pdf import generate_kyc_pdf
-from config import CF_R2_ACCESS_KEY_ID,CF_R2_ACCOUNT_ID,CF_R2_REGION,CF_R2_SECRET_ACCESS_KEY
+from config import CF_R2_ACCESS_KEY_ID, CF_R2_ACCOUNT_ID, CF_R2_REGION, CF_R2_SECRET_ACCESS_KEY
 import aioboto3
 import pytz
+import logging
+from logging.handlers import RotatingFileHandler
 
+# -----------------------
+# Logger Configuration
+# -----------------------
+LOG_DIR = "logs"
+os.makedirs(LOG_DIR, exist_ok=True)
+
+logger = logging.getLogger("kyc")
+logger.setLevel(logging.INFO)
+
+file_handler = RotatingFileHandler(
+    filename=os.path.join(LOG_DIR, "kyc_errors.log"),
+    maxBytes=5 * 1024 * 1024,
+    backupCount=5,
+    encoding="utf-8",
+)
+formatter = logging.Formatter("%(asctime)s %(levelname)s [%(name)s] %(message)s")
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
+
+# -----------------------
+# Router Initialization
+# -----------------------
 router = APIRouter(tags=["Agreement KYC"])
 
-S3_BUCKET_NAME="pride-user-data"
+# -----------------------
+# AWS S3 Upload Utility
+# -----------------------
+S3_BUCKET_NAME = "pride-user-data"
 
 async def write_pdf_to_s3(pdf_bytes: bytes, key: str):
-    """
-    Asynchronously upload a PDF file to S3.
-    
-    :param pdf_bytes: The binary content of the PDF file.
-    :param key: The S3 object key (file path in S3).
-    """
     session = aioboto3.Session()
-    
     async with session.client(
         "s3",
         aws_access_key_id=CF_R2_ACCESS_KEY_ID,
@@ -33,37 +53,44 @@ async def write_pdf_to_s3(pdf_bytes: bytes, key: str):
         endpoint_url=f"https://{CF_R2_ACCOUNT_ID}.r2.cloudflarestorage.com",
     ) as s3_client:
         await s3_client.put_object(
-            Bucket=S3_BUCKET_NAME,  # Use the actual bucket name
+            Bucket=S3_BUCKET_NAME,
             Key=key,
             Body=pdf_bytes,
-            ContentType="application/pdf"  # Correct MIME type for PDF
+            ContentType="application/pdf",
         )
-    
-    print(f"✅ Uploaded {key} to s3://{S3_BUCKET_NAME}/{key}")
+    logger.info(f"Uploaded PDF to s3://{S3_BUCKET_NAME}/{key}")
 
-
+# Ensure upload directories exist
 USER_IMAGE_UPLOAD_DIR = "static/kyc/Users_Images"
-for directory in [USER_IMAGE_UPLOAD_DIR]:
-    os.makedirs(directory, exist_ok=True)
+os.makedirs(USER_IMAGE_UPLOAD_DIR, exist_ok=True)
 
+# -----------------------
+# OTP Endpoints
+# -----------------------
 @router.post("/kyc_otp")
-async def kyc_send_otp(request: KYCOTPRequest,background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+async def kyc_send_otp(
+    request: KYCOTPRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
     tracking_id = await send_otp_kyc(request.mobile, background_tasks, db, request.email)
     return {"message": f"OTP sent to {request.mobile}", "tracking_id": tracking_id}
 
 @router.post("/kyc_otp/verify")
 def kyc_verify_otp(request: KYCOTPVerifyRequest, db: Session = Depends(get_db)):
-    otp_verification_result = verify_otp(request.mobile, request.otp, db)
-    if otp_verification_result["status"] == "success" and otp_verification_result["status_code"] == 200:
-        generated_uuid = str(uuid.uuid4())
-        kyc_user = KYCUser(mobile=request.mobile, email=request.email, UUID_id=generated_uuid,step_first=True)
+    result = verify_otp(request.mobile, request.otp, db)
+    if result.get("status") == "success" and result.get("status_code") == 200:
+        new_uuid = str(uuid.uuid4())
+        kyc_user = KYCUser(mobile=request.mobile, email=request.email, UUID_id=new_uuid, step_first=True)
         db.add(kyc_user)
         db.commit()
         db.refresh(kyc_user)
-        return {"message": "OTP verified successfully", "UUID_id": generated_uuid}
-    else:
-        raise HTTPException(status_code=400, detail="Invalid OTP")
+        return {"message": "OTP verified successfully", "UUID_id": new_uuid}
+    raise HTTPException(status_code=400, detail="Invalid OTP")
 
+# -----------------------
+# KYC Details Update
+# -----------------------
 @router.post("/kyc_user_details")
 async def update_kyc_details(
     UUID_id: str = Form(...),
@@ -89,89 +116,108 @@ async def update_kyc_details(
     gst_pdf: UploadFile = File(None),
     db: Session = Depends(get_db)
 ):
-    """
-    Updates the KYC record with complete user details and processes image uploads.
-    The UUID_id generated during OTP verification is used to locate the record.
-    """
-    kyc_user = db.query(KYCUser).filter(KYCUser.UUID_id == UUID_id).first()
-    if not kyc_user:
-        raise HTTPException(status_code=404, detail="KYC record not found")
+    try:
+        # Fetch existing record
+        kyc_user = db.query(KYCUser).filter(KYCUser.UUID_id == UUID_id).first()
+        if not kyc_user:
+            raise HTTPException(status_code=404, detail="KYC record not found")
 
-    kyc_user.full_name = full_name
-    kyc_user.father_name = father_name
-    kyc_user.alternate_mobile = alternate_mobile
-    kyc_user.dob = dob
-    kyc_user.age = age
-    kyc_user.nationality = nationality
-    kyc_user.pan_no = pan_no
-    kyc_user.aadhaar_no = aadhaar_no
-    kyc_user.gender = gender
-    kyc_user.marital_status = marital_status
-    kyc_user.state = state
-    kyc_user.city = city
-    kyc_user.address = address
-    kyc_user.pin_code = pin_code
-    kyc_user.occupation = occupation
-    kyc_user.director_name = director_name
-    kyc_user.gst_no = gst_no
+        # Update fields
+        for field, value in {
+            'full_name': full_name,
+            'father_name': father_name,
+            'alternate_mobile': alternate_mobile,
+            'dob': dob,
+            'age': age,
+            'nationality': nationality,
+            'pan_no': pan_no,
+            'aadhaar_no': aadhaar_no,
+            'gender': gender,
+            'marital_status': marital_status,
+            'state': state,
+            'city': city,
+            'address': address,
+            'pin_code': pin_code,
+            'occupation': occupation,
+            'director_name': director_name,
+            'gst_no': gst_no,
+        }.items():
+            setattr(kyc_user, field, value)
 
-    if gst_pdf:
-        key = f"gstPdf/{UUID_id}.pdf"
-        pdf_bytes = await gst_pdf.read()  # 🔥 read content from UploadFile
-        await write_pdf_to_s3(pdf_bytes, key)  # 🔥 pass bytes, not UploadFile
-        kyc_user.gst_pdf = key
+        # Handle GST PDF upload
+        if gst_pdf:
+            key = f"gstPdf/{UUID_id}.pdf"
+            pdf_bytes = await gst_pdf.read()
+            try:
+                await write_pdf_to_s3(pdf_bytes, key)
+                kyc_user.gst_pdf = key
+            except Exception:
+                logger.exception("Failed to upload GST PDF for UUID %s", UUID_id)
+                raise HTTPException(500, detail="Failed to upload GST PDF")
 
+        # Image upload helper
+        async def process_image_upload(image_file: UploadFile, upload_dir: str, existing_path: str = None) -> str:
+            if image_file:
+                if not image_file.content_type.startswith("image/"):
+                    raise HTTPException(status_code=400, detail="Please upload a valid image")
+                if existing_path and os.path.exists(existing_path):
+                    os.remove(existing_path)
+                ext = image_file.filename.rsplit('.', 1)[-1]
+                filename = f"{uuid.uuid4()}.{ext}"
+                path = os.path.join(upload_dir, filename)
+                with open(path, 'wb') as f:
+                    f.write(await image_file.read())
+                return path
+            return existing_path
 
-    async def process_image_upload(image_file: UploadFile, upload_dir: str, existing_path: str = None) -> str:
-        if image_file:
-            if not image_file.content_type.startswith("image/"):
-                raise HTTPException(status_code=400, detail="Please upload a valid image")
-            if existing_path and os.path.exists(existing_path):
-                os.remove(existing_path)
-            file_ext = image_file.filename.split(".")[-1]
-            unique_filename = f"{uuid.uuid4()}.{file_ext}"
-            file_path = os.path.join(upload_dir, unique_filename)
-            with open(file_path, "wb") as f:
-                f.write(await image_file.read())
-            return file_path
-        return existing_path
+        # Upload user image
+        kyc_user.user_image = await process_image_upload(user_image, USER_IMAGE_UPLOAD_DIR, kyc_user.user_image)
 
-    # Use current date and retrieve the email from the kyc_user record
-    # current_date_str = datetime.now()
-    india_timezone = pytz.timezone('Asia/Kolkata')
-    now_in_india = datetime.now(india_timezone)
-    data = {
-        "full_name": full_name,
-        "father_name": father_name,
-        "address": address,
-        "date": now_in_india,      # automatically current date and time
-        "email": kyc_user.email,         # email from the database
-        "city": city,
-        "UUID_id":UUID_id,
-        "platform":platform
-    }
+        # Prepare data for PDF generation
+        india_tz = pytz.timezone('Asia/Kolkata')
+        now_str = datetime.now(india_tz).strftime("%d-%b-%Y %H:%M:%S")
+        data = {
+            'full_name': full_name,
+            'father_name': father_name,
+            'address': address,
+            'date': now_str,
+            'email': kyc_user.email,
+            'city': city,
+            'UUID_id': UUID_id,
+            'platform': platform,
+        }
 
-    kyc_user.user_image = await process_image_upload(user_image, USER_IMAGE_UPLOAD_DIR, kyc_user.user_image)
-    
-    signer_details = await generate_kyc_pdf(data,UUID_id,db)
+        # Generate and sign PDF
+        try:
+            signer_details = await generate_kyc_pdf(data, UUID_id, db)
+        except Exception:
+            logger.exception("PDF generation or e-sign failed for UUID %s", UUID_id)
+            raise HTTPException(500, detail="Failed while generating or signing PDF")
 
-    kyc_user.group_id=signer_details.get("group_id")
-    requests_list = signer_details.get("requests", [])
-    if requests_list and isinstance(requests_list, list) and "signing_url" in requests_list[0]:
-        kyc_user.signature_url = requests_list[0]["signing_url"]
-    else:
-        kyc_user.signature_url = None
+        # Store signer info
+        kyc_user.group_id = signer_details.get('group_id')
+        reqs = signer_details.get('requests', [])
+        kyc_user.signature_url = reqs[0].get('signing_url') if reqs and isinstance(reqs, list) and 'signing_url' in reqs[0] else None
+        kyc_user.step_second = True
 
-    kyc_user.step_second = True
+        db.commit()
+        db.refresh(kyc_user)
 
-    db.commit()
-    db.refresh(kyc_user)
-    return {
-        "message": "KYC details updated successfully",
-        "UUID_id": kyc_user.UUID_id,
-        "signer_details": signer_details
-    }
+        return {
+            'message': 'KYC details updated successfully',
+            'UUID_id': kyc_user.UUID_id,
+            'signer_details': signer_details,
+        }
 
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Unhandled exception in update_kyc_details for UUID %s", UUID_id)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+# -----------------------
+# Retrieval Endpoints
+# -----------------------
 @router.get("/kyc/{uuid_id}", response_model=KYCDetails)
 def get_kyc_details(uuid_id: str, db: Session = Depends(get_db)):
     kyc_user = db.query(KYCUser).filter(KYCUser.UUID_id == uuid_id).first()
@@ -180,7 +226,5 @@ def get_kyc_details(uuid_id: str, db: Session = Depends(get_db)):
     return kyc_user
 
 @router.get("/kyc", response_model=list[KYCDetails])
-def get_kyc_details(db: Session = Depends(get_db)):
-    kyc_users = db.query(KYCUser).all()
-    print("kyc_users : ",kyc_users)  # 👈 Check this
-    return kyc_users
+def list_kyc_details(db: Session = Depends(get_db)):
+    return db.query(KYCUser).all()
