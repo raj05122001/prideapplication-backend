@@ -1,7 +1,6 @@
 from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi import APIRouter, Request, HTTPException, Depends, Response
 import aioboto3
-from config import AWS_ACCESS_KEY, AWS_SECRET_KEY, AWS_REGION
 import json
 from sqlalchemy.orm import Session
 from db.connection import get_db
@@ -12,6 +11,7 @@ import httpx
 from db.models import KYCUser
 from routes.mail_service.kyc_agreement_mail import send_agreement
 import base64
+from config import CF_R2_ACCESS_KEY_ID,CF_R2_ACCOUNT_ID,CF_R2_REGION,CF_R2_SECRET_ACCESS_KEY
 
 router = APIRouter(tags=["Agreement KYC Redirect"])
 S3_BUCKET_NAME = "pride-user-data"
@@ -33,9 +33,10 @@ async def write_json_to_s3(content: dict, key: str):
     
     async with session.client(
         "s3",
-        aws_access_key_id=AWS_ACCESS_KEY,
-        aws_secret_access_key=AWS_SECRET_KEY,
-        region_name=AWS_REGION
+        aws_access_key_id=CF_R2_ACCESS_KEY_ID,
+        aws_secret_access_key=CF_R2_SECRET_ACCESS_KEY,
+        region_name=CF_R2_REGION,
+        endpoint_url=f"https://{CF_R2_ACCOUNT_ID}.r2.cloudflarestorage.com",
     ) as s3_client:
         await s3_client.put_object(
             Bucket=S3_BUCKET_NAME,
@@ -57,9 +58,10 @@ async def write_pdf_to_s3(pdf_bytes: bytes, key: str):
     
     async with session.client(
         "s3",
-        aws_access_key_id=AWS_ACCESS_KEY,
-        aws_secret_access_key=AWS_SECRET_KEY,
-        region_name=AWS_REGION
+        aws_access_key_id=CF_R2_ACCESS_KEY_ID,
+        aws_secret_access_key=CF_R2_SECRET_ACCESS_KEY,
+        region_name=CF_R2_REGION,
+        endpoint_url=f"https://{CF_R2_ACCOUNT_ID}.r2.cloudflarestorage.com",
     ) as s3_client:
         await s3_client.put_object(
             Bucket=S3_BUCKET_NAME,  # Use the actual bucket name

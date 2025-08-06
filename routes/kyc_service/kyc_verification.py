@@ -8,7 +8,7 @@ from db.connection import get_db
 from routes.otp_service.otp_service import send_otp_kyc, verify_otp
 from db.schema import KYCOTPRequest, KYCOTPVerifyRequest, KYCDetails
 from routes.kyc_service.agreement_kyc_pdf import generate_kyc_pdf
-from config import AWS_ACCESS_KEY, AWS_SECRET_KEY, AWS_REGION
+from config import CF_R2_ACCESS_KEY_ID,CF_R2_ACCOUNT_ID,CF_R2_REGION,CF_R2_SECRET_ACCESS_KEY
 import aioboto3
 import pytz
 
@@ -27,9 +27,10 @@ async def write_pdf_to_s3(pdf_bytes: bytes, key: str):
     
     async with session.client(
         "s3",
-        aws_access_key_id=AWS_ACCESS_KEY,
-        aws_secret_access_key=AWS_SECRET_KEY,
-        region_name=AWS_REGION
+        aws_access_key_id=CF_R2_ACCESS_KEY_ID,
+        aws_secret_access_key=CF_R2_SECRET_ACCESS_KEY,
+        region_name=CF_R2_REGION,
+        endpoint_url=f"https://{CF_R2_ACCOUNT_ID}.r2.cloudflarestorage.com",
     ) as s3_client:
         await s3_client.put_object(
             Bucket=S3_BUCKET_NAME,  # Use the actual bucket name
