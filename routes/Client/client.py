@@ -79,40 +79,6 @@ def parse_amount_or_zero(s: Optional[str]) -> int:
     except Exception:
         return 0
 
-def _clean_cell(v: Any) -> Optional[str]:
-    if pd.isna(v):
-        return None
-    s = str(v).strip()
-    return s if s else None
-
-def _prepare_records(df: pd.DataFrame) -> List[Dict[str, Any]]:
-    df.columns = [str(c).strip() for c in df.columns]
-    present = [c for c in df.columns if c in COL_MAP]
-    if not present:
-        raise ValueError("No known columns found in uploaded file.")
-    df = df[present].rename(columns=COL_MAP)
-    for col in df.columns:
-        df[col] = df[col].map(_clean_cell)
-    def has_minimum(row) -> bool:
-        return any(_clean_cell(row.get(COL_MAP.get(k, k))) for k in REQUIRED_AT_LEAST_ONE)
-    df = df[df.apply(has_minimum, axis=1)]
-    return df.to_dict(orient="records")
-
-def _find_existing(db: Session, mobile: Optional[str], pan: Optional[str], email: Optional[str]) -> Optional[ClientData]:
-    q = None
-    if mobile and pan:
-        q = db.query(ClientData).filter(ClientData.Mobile == mobile, ClientData.Pan == pan).first()
-        if q: return q
-    if pan:
-        q = db.query(ClientData).filter(ClientData.Pan == pan).first()
-        if q: return q
-    if mobile:
-        q = db.query(ClientData).filter(ClientData.Mobile == mobile).first()
-        if q: return q
-    if email:
-        q = db.query(ClientData).filter(ClientData.Email == email).first()
-        if q: return q
-    return None
 
 def _row_to_dict(r: ClientData) -> Dict[str, Any]:
     return {
@@ -133,59 +99,6 @@ def _row_to_dict(r: ClientData) -> Dict[str, Any]:
         "isDelete": r.isDelete,
     }
 
-# -------------------------
-# 1) Import XLSX (already done)
-# -------------------------
-@router.post("/import-xlsx")
-async def import_clients_from_xlsx(
-    file: UploadFile = File(..., description="Excel .xlsx with headers like 'Client Name', 'Mobile', 'Pan', etc."),
-    db: Session = Depends(get_db),
-):
-    if not file.filename.lower().endswith(".xlsx"):
-        raise HTTPException(status_code=400, detail="Please upload a .xlsx file")
-    try:
-        content = await file.read()
-        df = pd.read_excel(BytesIO(content), dtype=str, engine="openpyxl")
-        records = _prepare_records(df)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Failed to read Excel: {e}")
-
-    inserted = updated = skipped = 0
-    errors: List[Tuple[int, str]] = []
-
-    try:
-        for idx, rec in enumerate(records, start=1):
-            try:
-                mobile = rec.get("Mobile")
-                pan = rec.get("Pan")
-                email = rec.get("Email")
-                existing = _find_existing(db, mobile, pan, email)
-                if existing:
-                    for k, v in rec.items():
-                        if v is not None and hasattr(existing, k):
-                            setattr(existing, k, v)
-                    existing.isDelete = False if hasattr(existing, "isDelete") else existing.isDelete
-                    updated += 1
-                else:
-                    row = ClientData(**rec, isDelete=False)
-                    db.add(row)
-                    inserted += 1
-            except Exception as row_err:
-                skipped += 1
-                errors.append((idx, str(row_err)))
-        db.commit()
-    except Exception as txn_err:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Database error: {txn_err}")
-
-    return {
-        "status": "ok",
-        "total_rows_in_file": len(records),
-        "inserted": inserted,
-        "updated": updated,
-        "skipped": skipped,
-        "errors": errors[:25],
-    }
 
 # ------------------------------------------------------------
 # 2) Get all clients with filters (date range, price, search)
@@ -409,6 +322,13 @@ def unique_client_product_total(
             return old
         return str(new).strip() if (new and str(new).strip()) else old
 
+    # mobile ko numeric asc sort ke liye normalize
+    def mobile_key(m: Optional[str]) -> str:
+        if not m:
+            return "z" * 15  # missing mobiles end me
+        digits = "".join(ch for ch in str(m) if ch.isdigit())
+        return digits.rjust(15, "0") if digits else "z" * 15
+
     agg: Dict[Tuple[str, str], Dict[str, Any]] = {}
 
     for r in rows:
@@ -445,7 +365,8 @@ def unique_client_product_total(
         entry["total"] += parse_amount_or_zero(r.TotalPaid)
 
     items = list(agg.values())
-    items.sort(key=lambda x: (-x["total"], (x["name"] or ""), x["client_key"], x["product"]))
+    # ✅ primary: mobile asc, tie-breakers: product, name, client_key
+    items.sort(key=lambda x: (mobile_key(x["mobile"]), x["product"], (x["name"] or ""), x["client_key"]))
 
     return {
         "unique_pairs": len(items),
