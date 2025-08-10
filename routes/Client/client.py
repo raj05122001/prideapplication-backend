@@ -194,7 +194,7 @@ async def import_clients_from_xlsx(
 def list_clients(
     db: Session = Depends(get_db),
     page: int = Query(1, ge=1),
-    limit: int = Query(20, ge=1, le=200),
+    limit: int = Query(20, ge=1),
     include_deleted: bool = Query(False),
     q: Optional[str] = Query(None, description="Global search across name/mobile/pan/email/city/product/status"),
     product: Optional[str] = None,
@@ -420,7 +420,7 @@ def delete_by_mobile(
 def list_deleted_clients(
     db: Session = Depends(get_db),
     page: int = Query(1, ge=1),
-    limit: int = Query(20, ge=1, le=200),
+    limit: int = Query(20, ge=1),
 ):
     qset = db.query(ClientData).filter(ClientData.isDelete == True)
     total = qset.count()
