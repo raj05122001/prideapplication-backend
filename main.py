@@ -29,6 +29,8 @@ from routes.Plan import CheckPlan
 from routes.NewsSubscriptionManager import NewsSubscriptionManager, send_notification
 from routes.payment import payments
 
+from routes.Client import client
+
 # Configure Logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -82,6 +84,7 @@ def read_root():
 
 
 # Registering Routes
+app.include_router(client.router)
 app.include_router(admin_login.router)
 app.include_router(eStamp.router)
 app.include_router(PanVerification.router)

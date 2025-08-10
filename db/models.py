@@ -140,6 +140,25 @@ class EStamp(Base):
     city = Column(String, nullable=False)
     pan = Column(String, nullable=False)
     mobile = Column(String(20), nullable=False)
-    # Here we store the file information as a string (e.g., file path or base64 encoded text).
     file = Column(String, nullable=True)
+
+
+class ClientData(Base):
+    __tablename__ = "demo_client_data"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ClientName = Column(String, nullable=True)
+    Mobile = Column(String(100), nullable=True)
+    Pan = Column(String(100), nullable=True)
+    Email = Column(String(100), nullable=True)
+    City = Column(String(100), nullable=True)
+    Product = Column(String(255), nullable=True)
+    Pack = Column(String(100), nullable=True)
+    TotalPaid = Column(String(100), nullable=True)
+    StartFrom = Column(String(100), nullable=True)
+    EndOn = Column(String(100), nullable=True)
+    Duration = Column(String(100), nullable=True)
+    Status = Column(String(255), nullable=True)
+    PaymentDate = Column(String(255), nullable=True)
+    isDelete = Column(Boolean, nullable=True, default=False)
 
