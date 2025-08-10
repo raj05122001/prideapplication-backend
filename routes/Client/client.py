@@ -318,6 +318,9 @@ def list_products(db: Session = Depends(get_db), include_deleted: bool = Query(F
 # ------------------------------------------------------------
 # 4) Unique client total payment (grouped by Mobile)
 # ------------------------------------------------------------
+# ------------------------------------------------------------
+# 4) Unique client total payment + details + payment count
+# ------------------------------------------------------------
 @router.get("/unique-clients/total")
 def unique_clients_total(
     db: Session = Depends(get_db),
@@ -331,25 +334,62 @@ def unique_clients_total(
         qset = qset.filter(ClientData.isDelete == False)
     rows = qset.all()
 
-    by_client: Dict[str, int] = {}
+    def pick(old: Optional[str], new: Optional[str]) -> Optional[str]:
+        """Return first non-empty value (keep existing if already set)."""
+        if old and str(old).strip():
+            return old
+        return str(new).strip() if (new and str(new).strip()) else old
+
+    agg: Dict[str, Dict[str, Any]] = {}
+
     for r in rows:
         d = parse_date_or_none(getattr(r, date_field))
         if date_from and (d is None or d < date_from):
             continue
         if date_to and (d is None or d > date_to):
             continue
-        key = (r.Mobile or r.Email or r.Pan or f"id-{r.id}")  # fallback
-        by_client[key] = by_client.get(key, 0) + parse_amount_or_zero(r.TotalPaid)
 
-    items = [{"client_key": k, "total": v} for k, v in sorted(by_client.items(), key=lambda x: (-x[1], x[0]))]
+        key = (r.Mobile or r.Email or r.Pan or f"id-{r.id}")  # fallback
+        if key not in agg:
+            agg[key] = {
+                "client_key": key,
+                "name": None,
+                "mobile": None,
+                "email": None,
+                "pan": None,
+                "city": None,
+                "products": set(),   # unique products list
+                "payments_count": 0,
+                "total": 0,
+            }
+
+        entry = agg[key]
+        entry["name"] = pick(entry["name"], r.ClientName)
+        entry["mobile"] = pick(entry["mobile"], r.Mobile)
+        entry["email"] = pick(entry["email"], r.Email)
+        entry["pan"] = pick(entry["pan"], r.Pan)
+        entry["city"] = pick(entry["city"], r.City)
+        prod = (r.Product or "").strip() or "Unknown"
+        entry["products"].add(prod)
+        entry["payments_count"] += 1
+        entry["total"] += parse_amount_or_zero(r.TotalPaid)
+
+    items = []
+    for v in agg.values():
+        v["products"] = sorted(list(v["products"]))
+        items.append(v)
+
+    items.sort(key=lambda x: (-x["total"], (x["name"] or ""), x["client_key"]))
+
     return {
-        "unique_clients": len(by_client),
-        "overall_total": sum(by_client.values()),
+        "unique_clients": len(items),
+        "overall_total": sum(x["total"] for x in items),
         "items": items,
     }
 
+
 # ------------------------------------------------------------
-# 5) Unique client + product total (Mobile, Product)
+# 5) Unique client + product total + details + payment count
 # ------------------------------------------------------------
 @router.get("/unique-client-product/total")
 def unique_client_product_total(
@@ -364,25 +404,52 @@ def unique_client_product_total(
         qset = qset.filter(ClientData.isDelete == False)
     rows = qset.all()
 
-    by_pair: Dict[Tuple[str, str], int] = {}
+    def pick(old: Optional[str], new: Optional[str]) -> Optional[str]:
+        if old and str(old).strip():
+            return old
+        return str(new).strip() if (new and str(new).strip()) else old
+
+    agg: Dict[Tuple[str, str], Dict[str, Any]] = {}
+
     for r in rows:
         d = parse_date_or_none(getattr(r, date_field))
         if date_from and (d is None or d < date_from):
             continue
         if date_to and (d is None or d > date_to):
             continue
+
         client_key = (r.Mobile or r.Email or r.Pan or f"id-{r.id}")
         product = (r.Product or "").strip() or "Unknown"
         key = (client_key, product)
-        by_pair[key] = by_pair.get(key, 0) + parse_amount_or_zero(r.TotalPaid)
 
-    items = [
-        {"client_key": ck, "product": pd, "total": amt}
-        for (ck, pd), amt in sorted(by_pair.items(), key=lambda x: (-x[1], x[0][0], x[0][1]))
-    ]
+        if key not in agg:
+            agg[key] = {
+                "client_key": client_key,
+                "product": product,
+                "name": None,
+                "mobile": None,
+                "email": None,
+                "pan": None,
+                "city": None,
+                "payments_count": 0,
+                "total": 0,
+            }
+
+        entry = agg[key]
+        entry["name"] = pick(entry["name"], r.ClientName)
+        entry["mobile"] = pick(entry["mobile"], r.Mobile)
+        entry["email"] = pick(entry["email"], r.Email)
+        entry["pan"] = pick(entry["pan"], r.Pan)
+        entry["city"] = pick(entry["city"], r.City)
+        entry["payments_count"] += 1
+        entry["total"] += parse_amount_or_zero(r.TotalPaid)
+
+    items = list(agg.values())
+    items.sort(key=lambda x: (-x["total"], (x["name"] or ""), x["client_key"], x["product"]))
+
     return {
-        "unique_pairs": len(by_pair),
-        "overall_total": sum(by_pair.values()),
+        "unique_pairs": len(items),
+        "overall_total": sum(x["total"] for x in items),
         "items": items,
     }
 
