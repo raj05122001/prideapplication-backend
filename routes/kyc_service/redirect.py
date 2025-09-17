@@ -31,7 +31,20 @@ def _safe_get(d: dict, *path, default=None):
         cur = cur[k]
     return cur
 
+def _qp_has_error(qp: QueryParams) -> bool:
+    """Detect error-ish query params from gateway/partner."""
+    a = qp.get("action")
+    return (bool(a) and "error" in a.lower()) or any(qp.get(k) for k in ("error", "reason", "code", "message"))
 
+def _build_redirect_url(base: str, qp: QueryParams, extra: dict | None = None) -> str:
+    """Merge incoming query params with extra ones, return full URL."""
+    items = list(qp.multi_items()) if hasattr(qp, "multi_items") else list(qp.items())
+    if extra:
+        for k, v in (extra.items() if isinstance(extra, dict) else []):
+            if v is not None:
+                items.append((k, str(v)))
+    qs = urlencode(items, doseq=True)
+    return f"{base}?{qs}" if qs else base
 
 router = APIRouter(tags=["Agreement KYC Redirect"])
 S3_BUCKET_NAME = "pride-user-data"
@@ -104,28 +117,29 @@ async def redirect_route(request: Request, response: Response, platform: str, UU
     else:
         base = f"https://pridebuzz.in/kyc/agreement/{UUID_id}"
 
-    # forward all incoming query params to destination (e.g., ?action=gateway-error&reason=...)
-    qp = request.query_params  # type: QueryParams
-    redirect_url = _append_query(base, qp)
+    qp: QueryParams = request.query_params
 
     # record step + any error meta if present
     kyc_user = db.query(KYCUser).filter(KYCUser.UUID_id == UUID_id).first()
+    sign_url = getattr(kyc_user, "signature_url", None)
+
     if kyc_user:
         kyc_user.step_third = True
-        # if caller sent an error/action, keep it for audit/UX
-        if "action" in qp or "error" in qp or "reason" in qp:
+        if "action" in qp or "error" in qp or "reason" in qp or "code" in qp or "message" in qp:
             details = dict(qp)
             try:
-                # keep previous error context if exists
                 old = kyc_user.faild_error or ""
                 merged = {"prev": old} if old else {}
                 merged.update(details)
                 kyc_user.faild_error = json.dumps(merged)
             except Exception:
-                # fallback to simple string
                 kyc_user.faild_error = str(details)
         db.commit()
 
+    # 👇 if error-ish params present AND we have a signature_url, append it so user can resume signing
+    extra = {"resume_url": sign_url} if (_qp_has_error(qp) and sign_url) else None
+
+    redirect_url = _build_redirect_url(base, qp, extra)
     return RedirectResponse(url=redirect_url, status_code=302)
 
 @router.post("/response_url/{UUID_id}")
