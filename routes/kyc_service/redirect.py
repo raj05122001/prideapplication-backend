@@ -12,6 +12,26 @@ from db.models import KYCUser
 from routes.mail_service.kyc_agreement_mail import send_agreement
 import base64
 from config import CF_R2_ACCESS_KEY_ID,CF_R2_ACCOUNT_ID,CF_R2_REGION,CF_R2_SECRET_ACCESS_KEY
+from urllib.parse import urlencode
+from starlette.datastructures import QueryParams
+
+def _append_query(url: str, qp: QueryParams) -> str:
+    """Append incoming query params to target url (preserves existing ones)."""
+    if not qp:
+        return url
+    sep = "&" if ("?" in url) else "?"
+    return f"{url}{sep}{qp}"
+
+def _safe_get(d: dict, *path, default=None):
+    """Safely walk keys in nested dicts."""
+    cur = d or {}
+    for k in path:
+        if not isinstance(cur, dict) or k not in cur:
+            return default
+        cur = cur[k]
+    return cur
+
+
 
 router = APIRouter(tags=["Agreement KYC Redirect"])
 S3_BUCKET_NAME = "pride-user-data"
@@ -73,22 +93,40 @@ async def write_pdf_to_s3(pdf_bytes: bytes, key: str):
     print(f"✅ Uploaded {key} to s3://{S3_BUCKET_NAME}/{key}")
 
 @router.post("/redirect/{platform}/{UUID_id}")
-async def redirect_route(response: Response,platform: str, UUID_id: str, db: Session = Depends(get_db)):
+async def redirect_route(request: Request, response: Response, platform: str, UUID_id: str, db: Session = Depends(get_db)):
     set_cors_allow_all(response)
-    if platform == "pridecons":
-        redirect_url = f"https://pridecons.com/web/download_agreement/{UUID_id}"
-    elif platform == "service":
-        redirect_url = f"https://service.pridecons.sbs/kyc/agreement/{UUID_id}"
-    else:
-        redirect_url = f"https://pridebuzz.in/kyc/agreement/{UUID_id}"
 
+    # choose base destination
+    if platform == "pridecons":
+        base = f"https://pridecons.com/web/download_agreement/{UUID_id}"
+    elif platform == "service":
+        base = f"https://service.pridecons.sbs/kyc/agreement/{UUID_id}"
+    else:
+        base = f"https://pridebuzz.in/kyc/agreement/{UUID_id}"
+
+    # forward all incoming query params to destination (e.g., ?action=gateway-error&reason=...)
+    qp = request.query_params  # type: QueryParams
+    redirect_url = _append_query(base, qp)
+
+    # record step + any error meta if present
     kyc_user = db.query(KYCUser).filter(KYCUser.UUID_id == UUID_id).first()
-    kyc_user.step_third = True
-    db.commit()
-    return RedirectResponse(
-        url=redirect_url,
-        status_code=302
-    )
+    if kyc_user:
+        kyc_user.step_third = True
+        # if caller sent an error/action, keep it for audit/UX
+        if "action" in qp or "error" in qp or "reason" in qp:
+            details = dict(qp)
+            try:
+                # keep previous error context if exists
+                old = kyc_user.faild_error or ""
+                merged = {"prev": old} if old else {}
+                merged.update(details)
+                kyc_user.faild_error = json.dumps(merged)
+            except Exception:
+                # fallback to simple string
+                kyc_user.faild_error = str(details)
+        db.commit()
+
+    return RedirectResponse(url=redirect_url, status_code=302)
 
 @router.post("/response_url/{UUID_id}")
 async def response_url_endpoint(request: Request,response: Response,UUID_id: str,db: Session = Depends(get_db)):
