@@ -227,52 +227,92 @@ def get_kyc_details(uuid_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="KYC record not found")
     return kyc_user
 
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
+from typing import Optional, List
 
-class PaginatedKYCResponse(BaseModel):
+class KYCPage(BaseModel):
+    items: List[KYCDetails]
     total: int
     page: int
-    page_size: int
-    total_pages: int
-    data: list[KYCDetails]
+    limit: int
+    pages: int
+    has_next: bool
+    has_prev: bool
 
 
-@router.get("/kyc", response_model=PaginatedKYCResponse)
+
+from fastapi import Query
+from sqlalchemy import or_, func
+
+SAFE_SORT_MAP = {
+    "id": KYCUser.id,
+    "mobile": KYCUser.mobile,
+    "email": KYCUser.email,
+    "pan_no": KYCUser.pan_no,
+    "dob": KYCUser.dob,
+}
+
+@router.get("/kyc", response_model=KYCPage)
 def list_kyc_details(
     db: Session = Depends(get_db),
-    page: int = Query(1, ge=1, description="Page number"),
-    page_size: int = Query(10, ge=1, le=100, description="Items per page"),
-    mobile: Optional[str] = Query(None, description="Filter by mobile number"),
-    email: Optional[str] = Query(None, description="Filter by email"),
-    pan_no: Optional[str] = Query(None, description="Filter by PAN number"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(25, ge=1, le=200),
+    q: Optional[str] = Query(
+        None, description="Search across mobile, email, pan_no (partial, case-insensitive)"
+    ),
+    mobile: Optional[str] = Query(None, description="Filter by mobile (partial)"),
+    email: Optional[str] = Query(None, description="Filter by email (partial)"),
+    pan_no: Optional[str] = Query(None, description="Filter by PAN (partial)"),
+    sort_by: str = Query("id", description=f"One of: {', '.join(SAFE_SORT_MAP.keys())}"),
+    order: str = Query("desc", regex="^(asc|desc)$"),
 ):
-    # Start with base query
     query = db.query(KYCUser)
-    
-    # Apply filters
+
+    # --- flexible search ---
+    filters = []
+    if q:
+        like = f"%{q.strip()}%"
+        filters.append(or_(
+            KYCUser.mobile.ilike(like),
+            KYCUser.email.ilike(like),
+            KYCUser.pan_no.ilike(like),
+        ))
+
     if mobile:
-        query = query.filter(KYCUser.mobile.ilike(f"%{mobile}%"))
-    
+        filters.append(KYCUser.mobile.ilike(f"%{mobile.strip()}%"))
     if email:
-        query = query.filter(KYCUser.email.ilike(f"%{email}%"))
-    
+        filters.append(KYCUser.email.ilike(f"%{email.strip()}%"))
     if pan_no:
-        query = query.filter(KYCUser.pan_no.ilike(f"%{pan_no}%"))
-    
-    # Get total count
+        filters.append(KYCUser.pan_no.ilike(f"%{pan_no.strip()}%"))
+
+    if filters:
+        query = query.filter(*filters)
+
+    # --- total before pagination ---
     total = query.count()
-    
-    # Calculate pagination
-    skip = (page - 1) * page_size
-    total_pages = (total + page_size - 1) // page_size
-    
-    # Get paginated results
-    items = query.offset(skip).limit(page_size).all()
-    
-    return PaginatedKYCResponse(
+
+    # --- safe sorting ---
+    sort_col = SAFE_SORT_MAP.get(sort_by, KYCUser.id)
+    if order == "desc":
+        query = query.order_by(sort_col.desc())
+    else:
+        query = query.order_by(sort_col.asc())
+
+    # --- pagination ---
+    offset = (page - 1) * limit
+    rows = query.offset(offset).limit(limit).all()
+
+    # --- build response ---
+    pages = (total + limit - 1) // limit if limit else 1
+    return KYCPage(
+        items=[KYCDetails.model_validate(r.__dict__) for r in rows],
         total=total,
         page=page,
-        page_size=page_size,
-        total_pages=total_pages,
-        data=items
+        limit=limit,
+        pages=pages,
+        has_next=page < pages,
+        has_prev=page > 1,
     )
+
+
+
