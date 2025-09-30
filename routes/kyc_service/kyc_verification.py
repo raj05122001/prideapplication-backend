@@ -1,7 +1,7 @@
 import os
 import uuid
 from datetime import datetime, date
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, BackgroundTasks, Query
 from sqlalchemy.orm import Session
 from db.models import KYCUser
 from db.connection import get_db
@@ -13,6 +13,8 @@ import aioboto3
 import pytz
 import logging
 from logging.handlers import RotatingFileHandler
+
+from typing import Dict, Any, List, Tuple, Optional
 
 # -----------------------
 # Logger Configuration
@@ -225,6 +227,52 @@ def get_kyc_details(uuid_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="KYC record not found")
     return kyc_user
 
-@router.get("/kyc", response_model=list[KYCDetails])
-def list_kyc_details(db: Session = Depends(get_db)):
-    return db.query(KYCUser).all()
+from pydantic import BaseModel
+
+class PaginatedKYCResponse(BaseModel):
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+    data: list[KYCDetails]
+
+
+@router.get("/kyc", response_model=PaginatedKYCResponse)
+def list_kyc_details(
+    db: Session = Depends(get_db),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(10, ge=1, le=100, description="Items per page"),
+    mobile: Optional[str] = Query(None, description="Filter by mobile number"),
+    email: Optional[str] = Query(None, description="Filter by email"),
+    pan_no: Optional[str] = Query(None, description="Filter by PAN number"),
+):
+    # Start with base query
+    query = db.query(KYCUser)
+    
+    # Apply filters
+    if mobile:
+        query = query.filter(KYCUser.mobile.ilike(f"%{mobile}%"))
+    
+    if email:
+        query = query.filter(KYCUser.email.ilike(f"%{email}%"))
+    
+    if pan_no:
+        query = query.filter(KYCUser.pan_no.ilike(f"%{pan_no}%"))
+    
+    # Get total count
+    total = query.count()
+    
+    # Calculate pagination
+    skip = (page - 1) * page_size
+    total_pages = (total + page_size - 1) // page_size
+    
+    # Get paginated results
+    items = query.offset(skip).limit(page_size).all()
+    
+    return PaginatedKYCResponse(
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+        data=items
+    )
