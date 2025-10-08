@@ -138,7 +138,7 @@ def verify_otp_endpoint(data: OTPVerify, db: Session = Depends(get_db)):
             password=hashed_password,
             role="user",  # default role for regular users
             service_active_date=(
-                datetime.utcnow() + timedelta(days=3)
+                datetime.utcnow() + timedelta(days=28)
             ).date().isoformat()
         )
         db.add(new_user)
