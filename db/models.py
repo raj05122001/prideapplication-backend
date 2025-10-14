@@ -162,3 +162,51 @@ class ClientData(Base):
     PaymentDate = Column(String(255), nullable=True)
     isDelete = Column(Boolean, nullable=True, default=False)
 
+
+class sourceScrapLead(Base):
+    __tablename__ = "source_scrap_lead"
+
+    # Primary key
+    id                = Column(Integer, primary_key=True, index=True, autoincrement=True)
+
+    # Core fields
+    full_name         = Column(String(100), nullable=True)
+    director_name     = Column(String(100), nullable=True)
+    father_name       = Column(String(100), nullable=True)
+    gender            = Column(String(10), nullable=True)
+    marital_status    = Column(String(20), nullable=True)
+    email             = Column(String(100), nullable=True, index=True)
+    mobile            = Column(String(20), nullable=True, index=True)
+    alternate_mobile  = Column(String(20), nullable=True)
+    aadhaar           = Column(String(12), nullable=True)
+    pan               = Column(String(10), nullable=True)
+    gstin             = Column(String(15), nullable=True, default="URP")
+
+    state             = Column(String(100), nullable=True)
+    city              = Column(String(100), nullable=True)
+    district          = Column(String(100), nullable=True)
+    address           = Column(Text, nullable=True)
+    pincode           = Column(String(6), nullable=True)
+    country           = Column(String(50), nullable=True)
+
+    dob               = Column(Date, nullable=True)
+    occupation        = Column(String(100), nullable=True)
+    experience        = Column(String(50), nullable=True)
+    investment        = Column(String(50), nullable=True)
+    source            = Column(String(100), nullable=True)
+
+    # New audit columns
+    created_at        = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at        = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+
+
+
+class PanVerificationOther(Base):
+    __tablename__ = "crm_pan_verifications_other"
+
+    PANnumber = Column(String(10), primary_key=True, index=True)
+    response  = Column(Text, nullable=True)
+    APICount  = Column(Integer, default=0, nullable=False)
+    created_at        = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at        = Column(DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now())
+

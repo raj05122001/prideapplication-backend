@@ -30,6 +30,8 @@ from routes.NewsSubscriptionManager import NewsSubscriptionManager, send_notific
 from routes.payment import payments
 
 from routes.Client import client
+from routes.sorceLead import sorceLead
+from routes.Pan_verification import PanVerification_Other_office
 
 # Configure Logging
 logging.basicConfig(level=logging.INFO)
@@ -84,6 +86,8 @@ def read_root():
 
 
 # Registering Routes
+app.include_router(PanVerification_Other_office.router)
+app.include_router(sorceLead.router)
 app.include_router(client.router)
 app.include_router(admin_login.router)
 app.include_router(eStamp.router)
