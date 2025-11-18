@@ -220,12 +220,7 @@ async def update_kyc_details(
 # -----------------------
 # Retrieval Endpoints
 # -----------------------
-@router.get("/kyc/{uuid_id}", response_model=KYCDetails)
-def get_kyc_details(uuid_id: str, db: Session = Depends(get_db)):
-    kyc_user = db.query(KYCUser).filter(KYCUser.UUID_id == uuid_id).first()
-    if not kyc_user:
-        raise HTTPException(status_code=404, detail="KYC record not found")
-    return kyc_user
+
 
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
@@ -385,4 +380,9 @@ def export_kyc_details(
         headers=headers,
     )
 
-
+@router.get("/kyc/{uuid_id}", response_model=KYCDetails)
+def get_kyc_details(uuid_id: str, db: Session = Depends(get_db)):
+    kyc_user = db.query(KYCUser).filter(KYCUser.UUID_id == uuid_id).first()
+    if not kyc_user:
+        raise HTTPException(status_code=404, detail="KYC record not found")
+    return kyc_user
