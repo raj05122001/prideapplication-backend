@@ -229,6 +229,9 @@ def get_kyc_details(uuid_id: str, db: Session = Depends(get_db)):
 
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
+import io
+import pandas as pd
+from fastapi.responses import StreamingResponse
 
 class KYCPage(BaseModel):
     items: List[KYCDetails]
@@ -314,5 +317,72 @@ def list_kyc_details(
         has_prev=page > 1,
     )
 
+@router.get("/kyc/export")
+def export_kyc_details(
+    db: Session = Depends(get_db),
+    q: Optional[str] = Query(
+        None, description="Search across mobile, email, pan_no (partial, case-insensitive)"
+    ),
+    mobile: Optional[str] = Query(None, description="Filter by mobile (partial)"),
+    email: Optional[str] = Query(None, description="Filter by email (partial)"),
+    pan_no: Optional[str] = Query(None, description="Filter by PAN (partial)"),
+    sort_by: str = Query("id", description=f"One of: {', '.join(SAFE_SORT_MAP.keys())}"),
+    order: str = Query("desc", regex="^(asc|desc)$"),
+):
+    """
+    Export all matching KYC records as an XLSX file.
+    Same filters & sorting as /kyc, but NO pagination.
+    """
+    query = db.query(KYCUser)
+
+    # --- same flexible search as /kyc ---
+    filters = []
+    if q:
+        like = f"%{q.strip()}%"
+        filters.append(or_(
+            KYCUser.mobile.ilike(like),
+            KYCUser.email.ilike(like),
+            KYCUser.pan_no.ilike(like),
+        ))
+
+    if mobile:
+        filters.append(KYCUser.mobile.ilike(f"%{mobile.strip()}%"))
+    if email:
+        filters.append(KYCUser.email.ilike(f"%{email.strip()}%"))
+    if pan_no:
+        filters.append(KYCUser.pan_no.ilike(f"%{pan_no.strip()}%"))
+
+    if filters:
+        query = query.filter(*filters)
+
+    # --- safe sorting (same as /kyc) ---
+    sort_col = SAFE_SORT_MAP.get(sort_by, KYCUser.id)
+    if order == "desc":
+        query = query.order_by(sort_col.desc())
+    else:
+        query = query.order_by(sort_col.asc())
+
+    rows = query.all()
+
+    # Pydantic schema से dict बनाएं ताकि fields clean रहें
+    records = [KYCDetails.model_validate(r.__dict__).model_dump() for r in rows]
+
+    # DataFrame → Excel in memory
+    df = pd.DataFrame(records)
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="KYC")
+    output.seek(0)
+
+    filename = f"kyc_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    headers = {
+        "Content-Disposition": f'attachment; filename="{filename}"'
+    }
+
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers,
+    )
 
 
